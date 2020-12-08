@@ -1,7 +1,10 @@
+//! A client implementation for the SUSI protocol
+
 use crate::message::Msg;
 use embedded_hal::digital::{InputPin, OutputPin};
 use nb;
 
+/// A Reader for the SUSI protocol
 pub struct Reader<DATA, CLK, ACK> {
 	pin_data: DATA,
 	pin_clk: CLK,
@@ -12,7 +15,8 @@ pub struct Reader<DATA, CLK, ACK> {
 	bits_read: u8,
 }
 
-#[derive(Debug)]
+/// Errors returned by the Reader
+#[derive(Debug, PartialEq)]
 pub enum Error {
 	IOError,
 }
@@ -23,6 +27,14 @@ where
 	CLK: InputPin,
 	ACK: OutputPin,
 {
+	/// Create a reader using data, clock and ack lines
+	///
+	/// * `pin_data` - An InputPin used to read the data line
+	/// * `pin_clk`  - An InputPin used to read the clock line
+	///                (falling edge reads a bit from `pin_data`)
+	/// * `pin_ack`  - An OutputPin used to send an acknowledge
+	///                (setting this to high should pull the ack
+	///                 line down, e.g. using an open drain output)
 	pub fn new(pin_data: DATA, pin_clk: CLK, pin_ack: ACK) -> Self {
 		let last_clk = pin_clk.try_is_high().unwrap_or(false);
 		Self {
@@ -54,12 +66,12 @@ where
 		// safe clock signal to detect next falling edge
 		self.last_clk = clk;
 		// full byte read
-		if self.bits_read == 7 {
+		if self.bits_read == 8 {
 			// TODO: handle 8ms sync timeout
 			// prepare to read the next byte
 			self.bits_read = 0;
 			// check if full message is read
-			let len = Msg::len(self.buf[0]);
+			let len = Msg::len_from_byte(self.buf[0]);
 			if self.current_byte >= len - 1 {
 				// reset buffer and return message
 				self.current_byte = 0;
@@ -73,5 +85,111 @@ where
 		}
 		// we need more bits
 		Err(nb::Error::WouldBlock)
+	}
+
+	pub fn ack(&mut self) -> nb::Result<(), Error> {
+		self.pin_ack.try_set_high().map_err(|_| Error::IOError)?;
+		// TODO: add some delay and return Err(nb::Error::WouldBlock);
+		self.pin_ack.try_set_low().map_err(|_| Error::IOError)?;
+		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::message::Msg;
+	use embedded_hal_mock::pin;
+	use pin::{Mock, State, Transaction};
+
+	// convert a vector of bytes to mocked pins that can be used
+	// to test a reader
+	fn get_pin_states(word: Vec<u8>) -> (Mock, Mock, Mock, usize) {
+		let bytes = word.len();
+		let bits = bytes * 8;
+		// add pin states for data line
+		let mut data_states = vec![];
+		for i in 0..bytes {
+			for j in 0..8 {
+				if (word[i] >> j) & 0x01 == 1 {
+					data_states.push(Transaction::get(State::High));
+				} else {
+					data_states.push(Transaction::get(State::Low));
+				}
+			}
+		}
+		let data = Mock::new(&data_states);
+		// add pin states for clock line
+		let mut clk_states = vec![];
+		clk_states.push(Transaction::get(State::Low));
+		for _i in 0..bits {
+			clk_states.push(Transaction::get(State::High));
+			clk_states.push(Transaction::get(State::Low));
+		}
+		let clk = Mock::new(&clk_states);
+		// add pin states for ack line
+		let ack = Mock::new(vec![]);
+		(data, clk, ack, bits)
+	}
+
+	// test reading a single NOOP message
+	#[test]
+	fn single_noop() {
+		let (data, clk, ack, bits) = get_pin_states(vec![0x00, 0x01]);
+		let mut reader = Reader::new(data, clk, ack);
+		for i in 0..bits * 2 {
+			let res = reader.read();
+			if i < (bits * 2) - 1 {
+				assert_eq!(res, Err(nb::Error::WouldBlock));
+			} else {
+				assert_eq!(res, Ok(Msg::Noop));
+			}
+		}
+	}
+
+	// test reading a single speed message
+	#[test]
+	fn single_diff() {
+		let (data, clk, ack, bits) = get_pin_states(vec![0x22, 0xf8]);
+		let mut reader = Reader::new(data, clk, ack);
+		for i in 0..bits * 2 {
+			let res = reader.read();
+			if i < (bits * 2) - 1 {
+				assert_eq!(res, Err(nb::Error::WouldBlock));
+			} else {
+				assert_eq!(res, Ok(Msg::SpeedDiff(-8)));
+			}
+		}
+	}
+
+	// test reading three consecutive messages
+	#[test]
+	fn three_messages() {
+		let (data, clk, ack, _bits) = get_pin_states(vec![0x22, 0xf8, 0x00, 0x01, 0x23, 0x08]);
+		let mut reader = Reader::new(data, clk, ack);
+		for i in 0..32 {
+			let res = reader.read();
+			if i < 31 {
+				assert_eq!(res, Err(nb::Error::WouldBlock));
+			} else {
+				assert_eq!(res, Ok(Msg::SpeedDiff(-8)));
+			}
+		}
+		for i in 0..32 {
+			let res = reader.read();
+			if i < 31 {
+				assert_eq!(res, Err(nb::Error::WouldBlock));
+			} else {
+				assert_eq!(res, Ok(Msg::Noop));
+			}
+		}
+		for i in 0..32 {
+			let res = reader.read();
+			if i < 31 {
+				assert_eq!(res, Err(nb::Error::WouldBlock));
+			} else {
+				assert_eq!(res, Ok(Msg::MotorPower(8)));
+			}
+		}
 	}
 }

@@ -44,10 +44,31 @@ impl From<[u8; 3]> for Msg {
 }
 
 impl Msg {
-	pub fn len(cmd: u8) -> usize {
+	/// Get the length of a message given as command byte
+	///
+	/// Returns size in bytes (2 or 3)
+	pub fn len_from_byte(cmd: u8) -> usize {
 		match cmd {
 			0x77 | 0x7B | 0x7F => 3,
 			_ => 2,
+		}
+	}
+
+	/// Get the length of a message
+	///
+	/// Returns size in bytes (2 or 3)
+	pub fn len(&self) -> usize {
+		match self {
+			// TODO: CV messages => 3
+			_ => 2,
+		}
+	}
+
+	/// Get if this message needs an ACK
+	pub fn needs_ack(&self) -> bool {
+		match self {
+			// TODO: CV messages => true
+			_ => false,
 		}
 	}
 }
