@@ -2,30 +2,45 @@
 
 use crate::message::Msg;
 use embedded_hal::digital::{InputPin, OutputPin};
+use embedded_hal::timer::{Cancel, CountDown};
+use embedded_time::duration::*;
 use nb;
 
 /// A Reader for the SUSI protocol
-pub struct Reader<DATA, CLK, ACK> {
+pub struct Reader<DATA, CLK, ACK, TIM> {
 	pin_data: DATA,
 	pin_clk: CLK,
 	pin_ack: ACK,
+	timer: TIM,
 	current_byte: usize,
 	buf: [u8; 3],
 	last_clk: bool,
 	bits_read: u8,
+	state: State,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum State {
+	Idle,
+	ReadingMessage,
+	WaitAcknowledge,
+	WaitAfterMessage,
 }
 
 /// Errors returned by the Reader
 #[derive(Debug, PartialEq)]
 pub enum Error {
 	IOError,
+	TimerError,
 }
 
-impl<DATA, CLK, ACK> Reader<DATA, CLK, ACK>
+impl<DATA, CLK, ACK, TIM> Reader<DATA, CLK, ACK, TIM>
 where
 	DATA: InputPin,
 	CLK: InputPin,
 	ACK: OutputPin,
+	TIM: CountDown + Cancel,
+	TIM::Time: From<Milliseconds<u32>>,
 {
 	/// Create a reader using data, clock and ack lines
 	///
@@ -35,20 +50,33 @@ where
 	/// * `pin_ack`  - An OutputPin used to send an acknowledge
 	///                (setting this to high should pull the ack
 	///                 line down, e.g. using an open drain output)
-	pub fn new(pin_data: DATA, pin_clk: CLK, pin_ack: ACK) -> Self {
+	pub fn new(pin_data: DATA, pin_clk: CLK, pin_ack: ACK, timer: TIM) -> Self {
 		let last_clk = pin_clk.try_is_high().unwrap_or(false);
 		Self {
 			pin_data,
 			pin_clk,
 			pin_ack,
+			timer,
 			current_byte: 0,
 			buf: [0; 3],
 			last_clk,
 			bits_read: 0,
+			state: State::Idle,
 		}
 	}
 
+	fn reset(&mut self) {
+		self.buf = [0; 3];
+		self.bits_read = 0;
+		self.state = State::Idle;
+	}
+
 	pub fn read(&mut self) -> nb::Result<Msg, Error> {
+		if self.state != State::Idle {
+			if self.timer.try_wait().is_ok() {
+				self.reset();
+			}
+		}
 		// get current clock signal
 		let clk = self.pin_clk.try_is_high().map_err(|_| Error::IOError)?;
 		// check if we have a falling edge
@@ -67,7 +95,11 @@ where
 		self.last_clk = clk;
 		// full byte read
 		if self.bits_read == 8 {
-			// TODO: handle 8ms sync timeout
+			// handle 8ms sync timeout
+			let _ = self.timer.try_cancel().map_err(|_| Error::TimerError); // ignore cancel error
+			self.timer
+				.try_start(8u32.milliseconds())
+				.map_err(|_| Error::TimerError)?;
 			// prepare to read the next byte
 			self.bits_read = 0;
 			// check if full message is read
@@ -83,6 +115,7 @@ where
 				self.current_byte = (self.current_byte + 1) % 3;
 			}
 		}
+		// TODO: send ACK and wait
 		// we need more bits
 		Err(nb::Error::WouldBlock)
 	}
@@ -102,9 +135,54 @@ mod tests {
 	use embedded_hal_mock::pin;
 	use pin::{Mock, State, Transaction};
 
+	use embedded_hal::timer::{Cancel, CountDown};
+	use embedded_time::rate::*;
+	struct MockTimer {
+		clock: Hertz<u64>,
+		count: u64,
+	}
+
+	impl MockTimer {
+		pub fn new(clock: Hertz<u64>) -> Self {
+			MockTimer { clock, count: 0 }
+		}
+	}
+
+	impl CountDown for MockTimer {
+		type Error = ();
+		type Time = Nanoseconds<u64>;
+
+		fn try_start<T: Into<Nanoseconds<u64>>>(&mut self, timeout: T) -> Result<(), Self::Error> {
+			self.count = timeout.into().0 * self.clock.0 / 1_000_000_000_u64;
+			Ok(())
+		}
+
+		fn try_wait(&mut self) -> nb::Result<(), Self::Error> {
+			if self.count > 0 {
+				self.count -= 1;
+			}
+			if self.count > 0 {
+				Err(nb::Error::WouldBlock)
+			} else {
+				Ok(())
+			}
+		}
+	}
+
+	impl Cancel for MockTimer {
+		fn try_cancel(&mut self) -> Result<(), Self::Error> {
+			if self.count > 0 {
+				self.count = 0;
+				Ok(())
+			} else {
+				Err(())
+			}
+		}
+	}
+
 	// convert a vector of bytes to mocked pins that can be used
 	// to test a reader
-	fn get_pin_states(word: Vec<u8>) -> (Mock, Mock, Mock, usize) {
+	fn get_pin_states(word: Vec<u8>) -> (Mock, Mock, Mock, MockTimer, usize) {
 		let bytes = word.len();
 		let bits = bytes * 8;
 		// add pin states for data line
@@ -129,14 +207,16 @@ mod tests {
 		let clk = Mock::new(&clk_states);
 		// add pin states for ack line
 		let ack = Mock::new(vec![]);
-		(data, clk, ack, bits)
+		// add a mocked timer
+		let timer = MockTimer::new(32u64.Hz());
+		(data, clk, ack, timer, bits)
 	}
 
 	// test reading a single NOOP message
 	#[test]
 	fn single_noop() {
-		let (data, clk, ack, bits) = get_pin_states(vec![0x00, 0x01]);
-		let mut reader = Reader::new(data, clk, ack);
+		let (data, clk, ack, timer, bits) = get_pin_states(vec![0x00, 0x01]);
+		let mut reader = Reader::new(data, clk, ack, timer);
 		for i in 0..bits * 2 {
 			let res = reader.read();
 			if i < (bits * 2) - 1 {
@@ -150,8 +230,8 @@ mod tests {
 	// test reading a single speed message
 	#[test]
 	fn single_diff() {
-		let (data, clk, ack, bits) = get_pin_states(vec![0x22, 0xf8]);
-		let mut reader = Reader::new(data, clk, ack);
+		let (data, clk, ack, timer, bits) = get_pin_states(vec![0x22, 0xf8]);
+		let mut reader = Reader::new(data, clk, ack, timer);
 		for i in 0..bits * 2 {
 			let res = reader.read();
 			if i < (bits * 2) - 1 {
@@ -165,8 +245,9 @@ mod tests {
 	// test reading three consecutive messages
 	#[test]
 	fn three_messages() {
-		let (data, clk, ack, _bits) = get_pin_states(vec![0x22, 0xf8, 0x00, 0x01, 0x23, 0x08]);
-		let mut reader = Reader::new(data, clk, ack);
+		let (data, clk, ack, timer, _bits) =
+			get_pin_states(vec![0x22, 0xf8, 0x00, 0x01, 0x23, 0x08]);
+		let mut reader = Reader::new(data, clk, ack, timer);
 		for i in 0..32 {
 			let res = reader.read();
 			if i < 31 {
