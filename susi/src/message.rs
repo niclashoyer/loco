@@ -92,6 +92,18 @@ pub struct FunctionGroupData {
 	data: u8,
 }
 
+#[derive(Debug, PartialEq, FromPrimitive, ToPrimitive)]
+pub enum AnalogNumber {
+	A0 = 0,
+	A1,
+	A2,
+	A3,
+	A4,
+	A5,
+	A6,
+	A7,
+}
+
 impl FunctionGroupData {
 	fn function_position(f: &Function) -> usize {
 		let n = f.to_usize().unwrap();
@@ -165,8 +177,23 @@ pub enum Msg {
 	LocomotiveSpeed(Direction, u8),
 	ControlSpeed(Direction, u8),
 	LocomotiveLoad(u8),
+	Analog(AnalogNumber, u8),
 	FunctionGroup(FunctionGroupNumber, FunctionGroupData),
 	BinaryState(u8, bool),
+	CVByteCheck {
+		addr: u8,
+		value: u8,
+	},
+	CVBitManipulation {
+		addr: u8,
+		check: bool,
+		value: bool,
+		position: u8,
+	},
+	CVByteSet {
+		addr: u8,
+		value: u8,
+	},
 	Unknown,
 }
 
@@ -188,7 +215,8 @@ impl Msg {
 	/// Returns size in bytes (2 or 3)
 	pub fn len(&self) -> usize {
 		match self {
-			// TODO: CV messages => 3
+			// only CV messages are 3 bytes long
+			Self::CVByteCheck { .. } | Self::CVBitManipulation { .. } | Self::CVByteSet { .. } => 3,
 			_ => 2,
 		}
 	}
@@ -196,7 +224,10 @@ impl Msg {
 	/// Get if this message needs an ACK
 	pub fn needs_ack(&self) -> bool {
 		match self {
-			// TODO: CV messages => true
+			// only CV messages need an ACK
+			Self::CVByteCheck { .. } | Self::CVBitManipulation { .. } | Self::CVByteSet { .. } => {
+				true
+			}
 			_ => false,
 		}
 	}
@@ -210,11 +241,40 @@ impl Msg {
 			&[36, data, _] => Msg::LocomotiveSpeed(Direction::from_u8(data), data & MASK7),
 			&[37, data, _] => Msg::ControlSpeed(Direction::from_u8(data), data & MASK7),
 			&[38, load, _] => Msg::LocomotiveLoad(load & MASK7),
+			&[40..=47, value, _] => {
+				Msg::Analog(AnalogNumber::from_u8(bytes[0] - 40).unwrap(), value)
+			}
 			&[96..=104, data, _] => Msg::FunctionGroup(
 				FunctionGroupNumber::from_u8(bytes[0] - 95).unwrap(),
 				data.into(),
 			),
 			&[109, data, _] => Msg::BinaryState(data & MASK7, data & 0x80 == 0x80),
+			&[119, addr, value] => {
+				if (addr & 0x80) == 0x80 {
+					Msg::CVByteCheck { addr, value }
+				} else {
+					Msg::Unknown
+				}
+			}
+			&[123, addr, data] => {
+				if (addr & 0x80) == 0x80 {
+					Msg::CVBitManipulation {
+						addr,
+						check: (data & 0x10) == 0x10,
+						value: (data & 0x08) == 0x08,
+						position: data & 0x07,
+					}
+				} else {
+					Msg::Unknown
+				}
+			}
+			&[127, addr, value] => {
+				if (addr & 0x80) == 0x80 {
+					Msg::CVByteSet { addr, value }
+				} else {
+					Msg::Unknown
+				}
+			}
 			_ => Msg::Unknown,
 		}
 	}
@@ -228,10 +288,23 @@ impl Msg {
 			Msg::LocomotiveSpeed(dir, speed) => [36, dir.into_u8() | (speed & MASK7), 0x00],
 			Msg::ControlSpeed(dir, speed) => [37, dir.into_u8() | (speed & MASK7), 0x00],
 			Msg::LocomotiveLoad(load) => [38, load & MASK7, 0x00],
+			Msg::Analog(num, value) => [40 + num.to_u8().unwrap(), *value, 0x00],
 			Msg::FunctionGroup(num, data) => {
 				[95 + num.to_u8().unwrap(), Into::<u8>::into(*data), 0x00]
 			}
 			Msg::BinaryState(addr, set) => [109, ((*set as u8) << 7) | (addr & MASK7), 0x00],
+			Msg::CVByteCheck { addr, value } => [119, 0x80 | (addr & MASK7), *value],
+			Msg::CVBitManipulation {
+				addr,
+				check,
+				value,
+				position,
+			} => [
+				123,
+				0x80 | (addr & MASK7),
+				0xE0 | ((*check as u8) << 4) | ((*value as u8) << 3) | (position & 0x07),
+			],
+			Msg::CVByteSet { addr, value } => [127, 0x80 | (addr & MASK7), *value],
 			Msg::Unknown => [0x00, 0x00, 0x00],
 		}
 	}
@@ -276,6 +349,9 @@ mod tests {
 					}
 					match msg {
 						Msg::LocomotiveLoad(_) => buf[1] &= MASK7,
+						Msg::CVBitManipulation { .. } => {
+							buf[2] |= 0xE0;
+						}
 						_ => {}
 					}
 					let buf2 = msg.to_bytes();
