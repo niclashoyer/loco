@@ -6,8 +6,8 @@ use embedded_hal::timer::{Cancel, CountDown};
 use embedded_time::duration::*;
 use nb;
 
-/// A Reader for the SUSI protocol
-pub struct Reader<DATA, CLK, ACK, TIM> {
+/// A Receiver for the SUSI protocol
+pub struct Receiver<DATA, CLK, ACK, TIM> {
 	pin_data: DATA,
 	pin_clk: CLK,
 	pin_ack: ACK,
@@ -22,19 +22,18 @@ pub struct Reader<DATA, CLK, ACK, TIM> {
 #[derive(Debug, PartialEq)]
 pub enum State {
 	Idle,
-	ReadingMessage,
 	WaitAcknowledge,
-	WaitAfterMessage,
+	WaitAfterByte,
 }
 
-/// Errors returned by the Reader
+/// Errors returned by the Receiver
 #[derive(Debug, PartialEq)]
 pub enum Error {
 	IOError,
 	TimerError,
 }
 
-impl<DATA, CLK, ACK, TIM> Reader<DATA, CLK, ACK, TIM>
+impl<DATA, CLK, ACK, TIM> Receiver<DATA, CLK, ACK, TIM>
 where
 	DATA: InputPin,
 	CLK: InputPin,
@@ -42,7 +41,7 @@ where
 	TIM: CountDown + Cancel,
 	TIM::Time: From<Milliseconds<u32>>,
 {
-	/// Create a reader using data, clock and ack lines
+	/// Create a receiver using data, clock and ack lines
 	///
 	/// * `pin_data` - An InputPin used to read the data line
 	/// * `pin_clk`  - An InputPin used to read the clock line
@@ -71,7 +70,23 @@ where
 		self.state = State::Idle;
 	}
 
+	fn start_timeout(&mut self) -> Result<(), Error> {
+		self.state = State::WaitAfterByte;
+		self.timer
+			.try_start(8u32.milliseconds())
+			.map_err(|_| Error::TimerError)?;
+		Ok(())
+	}
+
 	pub fn read(&mut self) -> nb::Result<Msg, Error> {
+		// if we are waiting to finish an acknowledge,
+		// call `ack` method and only continue if it won't
+		// block anymore
+		if self.state == State::WaitAcknowledge {
+			let _ = self.ack()?;
+		}
+		// if we are not in idle state, check if the timer
+		// finished to sync again
 		if self.state != State::Idle {
 			if self.timer.try_wait().is_ok() {
 				self.reset();
@@ -81,6 +96,10 @@ where
 		let clk = self.pin_clk.try_is_high().map_err(|_| Error::IOError)?;
 		// check if we have a falling edge
 		if self.last_clk && !clk {
+			if self.state == State::Idle {
+				// handle 8ms sync timeout
+				self.start_timeout()?;
+			}
 			// read data on falling edge
 			let data = if self.pin_data.try_is_high().map_err(|_| Error::IOError)? {
 				1
@@ -91,15 +110,12 @@ where
 			self.buf[self.current_byte] |= data << self.bits_read;
 			self.bits_read += 1;
 		}
-		// safe clock signal to detect next falling edge
+		// save clock signal to detect next falling edge
 		self.last_clk = clk;
 		// full byte read
 		if self.bits_read == 8 {
 			// handle 8ms sync timeout
-			let _ = self.timer.try_cancel().map_err(|_| Error::TimerError); // ignore cancel error
-			self.timer
-				.try_start(8u32.milliseconds())
-				.map_err(|_| Error::TimerError)?;
+			self.start_timeout()?;
 			// prepare to read the next byte
 			self.bits_read = 0;
 			// check if full message is read
@@ -107,24 +123,36 @@ where
 			if self.current_byte >= len - 1 {
 				// reset buffer and return message
 				self.current_byte = 0;
-				let msg = self.buf.into();
+				let msg = Msg::from_bytes(&self.buf);
 				self.buf = [0; 3];
+				self.state = State::WaitAfterByte;
 				return Ok(msg);
 			} else {
 				// increase byte counter
 				self.current_byte = (self.current_byte + 1) % 3;
 			}
 		}
-		// TODO: send ACK and wait
 		// we need more bits
 		Err(nb::Error::WouldBlock)
 	}
 
 	pub fn ack(&mut self) -> nb::Result<(), Error> {
-		self.pin_ack.try_set_high().map_err(|_| Error::IOError)?;
-		// TODO: add some delay and return Err(nb::Error::WouldBlock);
-		self.pin_ack.try_set_low().map_err(|_| Error::IOError)?;
-		Ok(())
+		if self.state == State::WaitAcknowledge {
+			if self.timer.try_wait().is_ok() {
+				self.pin_ack.try_set_low().map_err(|_| Error::IOError)?;
+				self.reset();
+				Ok(())
+			} else {
+				Err(nb::Error::WouldBlock)
+			}
+		} else {
+			self.timer
+				.try_start(2u32.milliseconds())
+				.map_err(|_| Error::TimerError)?;
+			self.pin_ack.try_set_high().map_err(|_| Error::IOError)?;
+			self.state = State::WaitAcknowledge;
+			Err(nb::Error::WouldBlock)
+		}
 	}
 }
 
@@ -181,7 +209,7 @@ mod tests {
 	}
 
 	// convert a vector of bytes to mocked pins that can be used
-	// to test a reader
+	// to test a receiver
 	fn get_pin_states(word: Vec<u8>) -> (Mock, Mock, Mock, MockTimer, usize) {
 		let bytes = word.len();
 		let bits = bytes * 8;
@@ -208,17 +236,17 @@ mod tests {
 		// add pin states for ack line
 		let ack = Mock::new(vec![]);
 		// add a mocked timer
-		let timer = MockTimer::new(32u64.Hz());
+		let timer = MockTimer::new(128_000u64.Hz());
 		(data, clk, ack, timer, bits)
 	}
 
 	// test reading a single NOOP message
 	#[test]
 	fn single_noop() {
-		let (data, clk, ack, timer, bits) = get_pin_states(vec![0x00, 0x01]);
-		let mut reader = Reader::new(data, clk, ack, timer);
+		let (data, clk, ack, timer, bits) = get_pin_states(vec![0x00, 0x00]);
+		let mut receiver = Receiver::new(data, clk, ack, timer);
 		for i in 0..bits * 2 {
-			let res = reader.read();
+			let res = receiver.read();
 			if i < (bits * 2) - 1 {
 				assert_eq!(res, Err(nb::Error::WouldBlock));
 			} else {
@@ -231,9 +259,9 @@ mod tests {
 	#[test]
 	fn single_diff() {
 		let (data, clk, ack, timer, bits) = get_pin_states(vec![0x22, 0xf8]);
-		let mut reader = Reader::new(data, clk, ack, timer);
+		let mut receiver = Receiver::new(data, clk, ack, timer);
 		for i in 0..bits * 2 {
-			let res = reader.read();
+			let res = receiver.read();
 			if i < (bits * 2) - 1 {
 				assert_eq!(res, Err(nb::Error::WouldBlock));
 			} else {
@@ -246,10 +274,10 @@ mod tests {
 	#[test]
 	fn three_messages() {
 		let (data, clk, ack, timer, _bits) =
-			get_pin_states(vec![0x22, 0xf8, 0x00, 0x01, 0x23, 0x08]);
-		let mut reader = Reader::new(data, clk, ack, timer);
+			get_pin_states(vec![0x22, 0xf8, 0x00, 0x00, 0x23, 0x08]);
+		let mut receiver = Receiver::new(data, clk, ack, timer);
 		for i in 0..32 {
-			let res = reader.read();
+			let res = receiver.read();
 			if i < 31 {
 				assert_eq!(res, Err(nb::Error::WouldBlock));
 			} else {
@@ -257,7 +285,7 @@ mod tests {
 			}
 		}
 		for i in 0..32 {
-			let res = reader.read();
+			let res = receiver.read();
 			if i < 31 {
 				assert_eq!(res, Err(nb::Error::WouldBlock));
 			} else {
@@ -265,7 +293,7 @@ mod tests {
 			}
 		}
 		for i in 0..32 {
-			let res = reader.read();
+			let res = receiver.read();
 			if i < 31 {
 				assert_eq!(res, Err(nb::Error::WouldBlock));
 			} else {

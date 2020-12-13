@@ -13,6 +13,8 @@ embedded-hal-mock = { path = '../embedded-hal-mock' }
 embedded-hal = "1.0.0-alpha.4"
 embedded-time = "0.10.1"
 nb = "1.0.0"
+num-traits = "0.2.14"
+num-derive = "0.3.3"
 
 [dev-dependencies]
 embedded-hal-mock = "0.8.0"
