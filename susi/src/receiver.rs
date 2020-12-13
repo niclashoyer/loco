@@ -210,7 +210,7 @@ mod tests {
 
 	// convert a vector of bytes to mocked pins that can be used
 	// to test a receiver
-	fn get_pin_states(word: Vec<u8>) -> (Mock, Mock, Mock, MockTimer, usize) {
+	fn get_pin_states(word: Vec<u8>, acks: usize) -> (Mock, Mock, Mock, MockTimer, usize) {
 		let bytes = word.len();
 		let bits = bytes * 8;
 		// add pin states for data line
@@ -234,7 +234,12 @@ mod tests {
 		}
 		let clk = Mock::new(&clk_states);
 		// add pin states for ack line
-		let ack = Mock::new(vec![]);
+		let mut ack_states = vec![];
+		for _ in 1..=acks {
+			ack_states.push(Transaction::set(State::High));
+			ack_states.push(Transaction::set(State::Low));
+		}
+		let ack = Mock::new(&ack_states);
 		// add a mocked timer
 		let timer = MockTimer::new(128_000u64.Hz());
 		(data, clk, ack, timer, bits)
@@ -243,7 +248,7 @@ mod tests {
 	// test reading a single NOOP message
 	#[test]
 	fn single_noop() {
-		let (data, clk, ack, timer, bits) = get_pin_states(vec![0x00, 0x00]);
+		let (data, clk, ack, timer, bits) = get_pin_states(vec![0x00, 0x00], 0);
 		let mut receiver = Receiver::new(data, clk, ack, timer);
 		for i in 0..bits * 2 {
 			let res = receiver.read();
@@ -258,7 +263,7 @@ mod tests {
 	// test reading a single speed message
 	#[test]
 	fn single_diff() {
-		let (data, clk, ack, timer, bits) = get_pin_states(vec![0x22, 0xf8]);
+		let (data, clk, ack, timer, bits) = get_pin_states(vec![0x22, 0xf8], 0);
 		let mut receiver = Receiver::new(data, clk, ack, timer);
 		for i in 0..bits * 2 {
 			let res = receiver.read();
@@ -274,7 +279,7 @@ mod tests {
 	#[test]
 	fn three_messages() {
 		let (data, clk, ack, timer, _bits) =
-			get_pin_states(vec![0x22, 0xf8, 0x00, 0x00, 0x23, 0x08]);
+			get_pin_states(vec![0x22, 0xf8, 0x00, 0x00, 0x23, 0x08], 0);
 		let mut receiver = Receiver::new(data, clk, ack, timer);
 		for i in 0..32 {
 			let res = receiver.read();
@@ -300,5 +305,26 @@ mod tests {
 				assert_eq!(res, Ok(Msg::MotorPower(8)));
 			}
 		}
+	}
+
+	#[test]
+	fn cv_set() {
+		let (data, clk, ack, timer, bits) = get_pin_states(vec![0x7F, 0x80, 0xAA], 1);
+		let mut receiver = Receiver::new(data, clk, ack, timer);
+		for i in 0..bits * 2 {
+			let res = receiver.read();
+			if i < (bits * 2) - 1 {
+				assert_eq!(res, Err(nb::Error::WouldBlock));
+			} else {
+				assert_eq!(
+					res,
+					Ok(Msg::CVByteSet {
+						addr: 0x80,
+						value: 0xAA
+					})
+				);
+			}
+		}
+		let _ = receiver.ack();
 	}
 }
