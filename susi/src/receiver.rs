@@ -19,7 +19,7 @@ pub struct Receiver<DATA, CLK, ACK, TIM> {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum State {
+enum State {
 	Idle,
 	WaitAcknowledge,
 	WaitAfterByte,
