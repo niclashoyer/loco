@@ -4,7 +4,6 @@ use crate::message::Msg;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal::timer::{Cancel, CountDown};
 use embedded_time::duration::*;
-use nb;
 
 /// A Receiver for the SUSI protocol
 pub struct Receiver<DATA, CLK, ACK, TIM> {
@@ -87,10 +86,8 @@ where
 		}
 		// if we are not in idle state, check if the timer
 		// finished to sync again
-		if self.state != State::Idle {
-			if self.timer.try_wait().is_ok() {
-				self.reset();
-			}
+		if self.state != State::Idle && self.timer.try_wait().is_ok() {
+			self.reset();
 		}
 		// get current clock signal
 		let clk = self.pin_clk.try_is_high().map_err(|_| Error::IOError)?;

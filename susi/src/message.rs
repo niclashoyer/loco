@@ -160,7 +160,7 @@ impl Direction {
 		}
 	}
 
-	fn into_u8(&self) -> u8 {
+	fn to_u8(&self) -> u8 {
 		match self {
 			Direction::Forward => 0x80,
 			Direction::Backward => 0x00,
@@ -199,6 +199,7 @@ pub enum Msg {
 
 static MASK7: u8 = 0b01111111;
 
+#[allow(clippy::len_without_is_empty)]
 impl Msg {
 	/// Get the length of a message given as command byte
 	///
@@ -233,30 +234,30 @@ impl Msg {
 	}
 
 	pub fn from_bytes(bytes: &[u8; 3]) -> Self {
-		match bytes {
-			&[0, 0, _] => Msg::Noop,
-			&[33, 0x01, _] => Msg::TriggerPulse,
-			&[34, speed, _] => Msg::SpeedDiff(speed as i8),
-			&[35, power, _] => Msg::MotorPower(power as i8),
-			&[36, data, _] => Msg::LocomotiveSpeed(Direction::from_u8(data), data & MASK7),
-			&[37, data, _] => Msg::ControlSpeed(Direction::from_u8(data), data & MASK7),
-			&[38, load, _] => Msg::LocomotiveLoad(load & MASK7),
-			&[40..=47, value, _] => {
+		match *bytes {
+			[0, 0, _] => Msg::Noop,
+			[33, 0x01, _] => Msg::TriggerPulse,
+			[34, speed, _] => Msg::SpeedDiff(speed as i8),
+			[35, power, _] => Msg::MotorPower(power as i8),
+			[36, data, _] => Msg::LocomotiveSpeed(Direction::from_u8(data), data & MASK7),
+			[37, data, _] => Msg::ControlSpeed(Direction::from_u8(data), data & MASK7),
+			[38, load, _] => Msg::LocomotiveLoad(load & MASK7),
+			[40..=47, value, _] => {
 				Msg::Analog(AnalogNumber::from_u8(bytes[0] - 40).unwrap(), value)
 			}
-			&[96..=104, data, _] => Msg::FunctionGroup(
+			[96..=104, data, _] => Msg::FunctionGroup(
 				FunctionGroupNumber::from_u8(bytes[0] - 95).unwrap(),
 				data.into(),
 			),
-			&[109, data, _] => Msg::BinaryState(data & MASK7, data & 0x80 == 0x80),
-			&[119, addr, value] => {
+			[109, data, _] => Msg::BinaryState(data & MASK7, data & 0x80 == 0x80),
+			[119, addr, value] => {
 				if (addr & 0x80) == 0x80 {
 					Msg::CVByteCheck { addr, value }
 				} else {
 					Msg::Unknown
 				}
 			}
-			&[123, addr, data] => {
+			[123, addr, data] => {
 				if (addr & 0x80) == 0x80 {
 					Msg::CVBitManipulation {
 						addr,
@@ -268,7 +269,7 @@ impl Msg {
 					Msg::Unknown
 				}
 			}
-			&[127, addr, value] => {
+			[127, addr, value] => {
 				if (addr & 0x80) == 0x80 {
 					Msg::CVByteSet { addr, value }
 				} else {
@@ -285,8 +286,8 @@ impl Msg {
 			Msg::TriggerPulse => [33, 0x01, 0x00],
 			Msg::SpeedDiff(diff) => [34, *diff as u8, 0x00],
 			Msg::MotorPower(power) => [35, *power as u8, 0x00],
-			Msg::LocomotiveSpeed(dir, speed) => [36, dir.into_u8() | (speed & MASK7), 0x00],
-			Msg::ControlSpeed(dir, speed) => [37, dir.into_u8() | (speed & MASK7), 0x00],
+			Msg::LocomotiveSpeed(dir, speed) => [36, dir.to_u8() | (speed & MASK7), 0x00],
+			Msg::ControlSpeed(dir, speed) => [37, dir.to_u8() | (speed & MASK7), 0x00],
 			Msg::LocomotiveLoad(load) => [38, load & MASK7, 0x00],
 			Msg::Analog(num, value) => [40 + num.to_u8().unwrap(), *value, 0x00],
 			Msg::FunctionGroup(num, data) => {
