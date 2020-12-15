@@ -6,10 +6,9 @@ use embedded_hal::timer::CountDown;
 use embedded_time::duration::*;
 
 /// A Receiver for the SUSI protocol
-pub struct Receiver<DATA, CLK, ACK, TIM> {
+pub struct Receiver<DATA, CLK, TIM> {
 	pin_data: DATA,
 	pin_clk: CLK,
-	pin_ack: ACK,
 	timer: TIM,
 	current_byte: usize,
 	buf: [u8; 3],
@@ -32,28 +31,26 @@ pub enum Error {
 	TimerError,
 }
 
-impl<DATA, CLK, ACK, TIM> Receiver<DATA, CLK, ACK, TIM>
+impl<DATA, CLK, TIM> Receiver<DATA, CLK, TIM>
 where
-	DATA: InputPin,
+	DATA: InputPin + OutputPin,
 	CLK: InputPin,
-	ACK: OutputPin,
 	TIM: CountDown,
 	TIM::Time: From<Milliseconds<u32>>,
 {
 	/// Create a receiver using data, clock and ack lines
 	///
-	/// * `pin_data` - An InputPin used to read the data line
+	/// * `pin_data` - An InputPin + OutputPin that must be configured
+	///                as open drain output. If the pin is set to low,
+	///                data can be read. If it is set to high, the line
+	///                will be pulled to GND.
 	/// * `pin_clk`  - An InputPin used to read the clock line
 	///                (falling edge reads a bit from `pin_data`)
-	/// * `pin_ack`  - An OutputPin used to send an acknowledge
-	///                (setting this to high should pull the ack
-	///                 line down, e.g. using an open drain output)
-	pub fn new(pin_data: DATA, pin_clk: CLK, pin_ack: ACK, timer: TIM) -> Self {
+	pub fn new(pin_data: DATA, pin_clk: CLK, timer: TIM) -> Self {
 		let last_clk = pin_clk.try_is_high().unwrap_or(false);
 		Self {
 			pin_data,
 			pin_clk,
-			pin_ack,
 			timer,
 			current_byte: 0,
 			buf: [0; 3],
@@ -136,7 +133,7 @@ where
 	pub fn ack(&mut self) -> nb::Result<(), Error> {
 		if self.state == State::WaitAcknowledge {
 			if self.timer.try_wait().is_ok() {
-				self.pin_ack.try_set_low().map_err(|_| Error::IOError)?;
+				self.pin_data.try_set_low().map_err(|_| Error::IOError)?;
 				self.reset();
 				Ok(())
 			} else {
@@ -146,7 +143,7 @@ where
 			self.timer
 				.try_start(2u32.milliseconds())
 				.map_err(|_| Error::TimerError)?;
-			self.pin_ack.try_set_high().map_err(|_| Error::IOError)?;
+			self.pin_data.try_set_high().map_err(|_| Error::IOError)?;
 			self.state = State::WaitAcknowledge;
 			Err(nb::Error::WouldBlock)
 		}
@@ -207,7 +204,7 @@ mod tests {
 
 	// convert a vector of bytes to mocked pins that can be used
 	// to test a receiver
-	fn get_pin_states(word: Vec<u8>, acks: usize) -> (Mock, Mock, Mock, MockTimer, usize) {
+	fn get_pin_states(word: Vec<u8>, acks: usize) -> (Mock, Mock, MockTimer, usize) {
 		let bytes = word.len();
 		let bits = bytes * 8;
 		// add pin states for data line
@@ -221,6 +218,11 @@ mod tests {
 				}
 			}
 		}
+		// add pin states for data line
+		for _ in 1..=acks {
+			data_states.push(Transaction::set(State::High));
+			data_states.push(Transaction::set(State::Low));
+		}
 		let data = Mock::new(&data_states);
 		// add pin states for clock line
 		let mut clk_states = vec![];
@@ -230,23 +232,16 @@ mod tests {
 			clk_states.push(Transaction::get(State::Low));
 		}
 		let clk = Mock::new(&clk_states);
-		// add pin states for ack line
-		let mut ack_states = vec![];
-		for _ in 1..=acks {
-			ack_states.push(Transaction::set(State::High));
-			ack_states.push(Transaction::set(State::Low));
-		}
-		let ack = Mock::new(&ack_states);
 		// add a mocked timer
 		let timer = MockTimer::new(128_000u64.Hz());
-		(data, clk, ack, timer, bits)
+		(data, clk, timer, bits)
 	}
 
 	// test reading a single NOOP message
 	#[test]
 	fn single_noop() {
-		let (data, clk, ack, timer, bits) = get_pin_states(vec![0x00, 0x00], 0);
-		let mut receiver = Receiver::new(data, clk, ack, timer);
+		let (data, clk, timer, bits) = get_pin_states(vec![0x00, 0x00], 0);
+		let mut receiver = Receiver::new(data, clk, timer);
 		for i in 0..bits * 2 {
 			let res = receiver.read();
 			if i < (bits * 2) - 1 {
@@ -260,8 +255,8 @@ mod tests {
 	// test reading a single speed message
 	#[test]
 	fn single_diff() {
-		let (data, clk, ack, timer, bits) = get_pin_states(vec![0x22, 0xf8], 0);
-		let mut receiver = Receiver::new(data, clk, ack, timer);
+		let (data, clk, timer, bits) = get_pin_states(vec![0x22, 0xf8], 0);
+		let mut receiver = Receiver::new(data, clk, timer);
 		for i in 0..bits * 2 {
 			let res = receiver.read();
 			if i < (bits * 2) - 1 {
@@ -275,9 +270,8 @@ mod tests {
 	// test reading three consecutive messages
 	#[test]
 	fn three_messages() {
-		let (data, clk, ack, timer, _bits) =
-			get_pin_states(vec![0x22, 0xf8, 0x00, 0x00, 0x23, 0x08], 0);
-		let mut receiver = Receiver::new(data, clk, ack, timer);
+		let (data, clk, timer, _bits) = get_pin_states(vec![0x22, 0xf8, 0x00, 0x00, 0x23, 0x08], 0);
+		let mut receiver = Receiver::new(data, clk, timer);
 		for i in 0..32 {
 			let res = receiver.read();
 			if i < 31 {
@@ -306,8 +300,8 @@ mod tests {
 
 	#[test]
 	fn cv_set() {
-		let (data, clk, ack, timer, bits) = get_pin_states(vec![0x7F, 0x80, 0xAA], 1);
-		let mut receiver = Receiver::new(data, clk, ack, timer);
+		let (data, clk, timer, bits) = get_pin_states(vec![0x7F, 0x80, 0xAA], 1);
+		let mut receiver = Receiver::new(data, clk, timer);
 		for i in 0..bits * 2 {
 			let res = receiver.read();
 			if i < (bits * 2) - 1 {
