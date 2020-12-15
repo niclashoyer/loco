@@ -2,7 +2,7 @@
 
 use crate::message::Msg;
 use embedded_hal::digital::{InputPin, OutputPin};
-use embedded_hal::timer::{Cancel, CountDown};
+use embedded_hal::timer::CountDown;
 use embedded_time::duration::*;
 
 /// A Receiver for the SUSI protocol
@@ -37,7 +37,7 @@ where
 	DATA: InputPin,
 	CLK: InputPin,
 	ACK: OutputPin,
-	TIM: CountDown + Cancel,
+	TIM: CountDown,
 	TIM::Time: From<Milliseconds<u32>>,
 {
 	/// Create a receiver using data, clock and ack lines
