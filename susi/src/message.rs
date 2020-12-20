@@ -105,7 +105,7 @@ pub enum AnalogNumber {
 }
 
 impl FunctionGroupData {
-	fn function_position(f: &Function) -> usize {
+	fn function_position(f: Function) -> usize {
 		let n = f.to_usize().unwrap();
 		match n {
 			0 => 4,
@@ -114,12 +114,12 @@ impl FunctionGroupData {
 		}
 	}
 
-	pub fn get(&self, f: &Function) -> bool {
+	pub fn get(&self, f: Function) -> bool {
 		let p = Self::function_position(f);
 		(self.data >> p) & 0x01 == 0x01
 	}
 
-	pub fn set(&mut self, f: &Function, value: bool) {
+	pub fn set(&mut self, f: Function, value: bool) {
 		let p = Self::function_position(f);
 		if value {
 			self.data |= 1 << p;
