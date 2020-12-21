@@ -1,16 +1,17 @@
 //! A client implementation for the SUSI protocol
 
 use crate::message::Msg;
+use crate::Error;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal::timer::CountDown;
 use embedded_time::duration::*;
 
-/// A Receiver for the SUSI protocol
+/// A receiver for the SUSI protocol
 pub struct Receiver<DATA, CLK, TIM> {
 	pin_data: DATA,
 	pin_clk: CLK,
 	timer: TIM,
-	current_byte: usize,
+	current_byte: u8,
 	buf: [u8; 3],
 	last_clk: bool,
 	bits_read: u8,
@@ -24,13 +25,6 @@ enum State {
 	WaitAfterByte,
 }
 
-/// Errors returned by the Receiver
-#[derive(Debug, PartialEq)]
-pub enum Error {
-	IOError,
-	TimerError,
-}
-
 impl<DATA, CLK, TIM> Receiver<DATA, CLK, TIM>
 where
 	DATA: InputPin + OutputPin,
@@ -38,7 +32,7 @@ where
 	TIM: CountDown,
 	TIM::Time: From<Milliseconds<u32>>,
 {
-	/// Create a receiver using data, clock and ack lines
+	/// Create a receiver using data and clock lines
 	///
 	/// * `pin_data` - An InputPin + OutputPin that must be configured
 	///                as open drain output. If the pin is set to low,
@@ -69,12 +63,15 @@ where
 	fn start_timeout(&mut self) -> Result<(), Error> {
 		self.state = State::WaitAfterByte;
 		self.timer
-			.try_start(8u32.milliseconds())
+			.try_start(8.milliseconds())
 			.map_err(|_| Error::TimerError)?;
 		Ok(())
 	}
 
 	pub fn read(&mut self) -> nb::Result<Msg, Error> {
+		// TODO: maybe replace the next ifs with a match on the state
+		// and store buf in state
+
 		// if we are waiting to finish an acknowledge,
 		// call `ack` method and only continue if it won't
 		// block anymore
@@ -101,7 +98,7 @@ where
 				0
 			};
 			// push bit into buffer
-			self.buf[self.current_byte] |= data << self.bits_read;
+			self.buf[self.current_byte as usize] |= data << self.bits_read;
 			self.bits_read += 1;
 		}
 		// save clock signal to detect next falling edge
@@ -141,7 +138,7 @@ where
 			}
 		} else {
 			self.timer
-				.try_start(2u32.milliseconds())
+				.try_start(2.milliseconds())
 				.map_err(|_| Error::TimerError)?;
 			self.pin_data.try_set_high().map_err(|_| Error::IOError)?;
 			self.state = State::WaitAcknowledge;

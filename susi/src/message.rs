@@ -105,8 +105,8 @@ pub enum AnalogNumber {
 }
 
 impl FunctionGroupData {
-	fn function_position(f: Function) -> usize {
-		let n = f.to_usize().unwrap();
+	fn function_position(f: Function) -> u8 {
+		let n = f.to_u8().unwrap();
 		match n {
 			0 => 4,
 			1..=4 => n - 1,
@@ -204,7 +204,7 @@ impl Msg {
 	/// Get the length of a message given as command byte
 	///
 	/// Returns size in bytes (2 or 3)
-	pub fn len_from_byte(cmd: u8) -> usize {
+	pub fn len_from_byte(cmd: u8) -> u8 {
 		match cmd {
 			0x77 | 0x7B | 0x7F => 3,
 			_ => 2,
@@ -214,7 +214,7 @@ impl Msg {
 	/// Get the length of a message
 	///
 	/// Returns size in bytes (2 or 3)
-	pub fn len(&self) -> usize {
+	pub fn len(&self) -> u8 {
 		match self {
 			// only CV messages are 3 bytes long
 			Self::CVByteCheck { .. } | Self::CVBitManipulation { .. } | Self::CVByteSet { .. } => 3,
