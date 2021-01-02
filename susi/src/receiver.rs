@@ -1,16 +1,17 @@
 //! A client implementation for the SUSI protocol
 
 use crate::message::Msg;
+use crate::Error;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal::timer::CountDown;
 use embedded_time::duration::*;
 
-/// A Receiver for the SUSI protocol
+/// A receiver for the SUSI protocol
 pub struct Receiver<DATA, CLK, TIM> {
 	pin_data: DATA,
 	pin_clk: CLK,
 	timer: TIM,
-	current_byte: usize,
+	current_byte: u8,
 	buf: [u8; 3],
 	last_clk: bool,
 	bits_read: u8,
@@ -24,13 +25,6 @@ enum State {
 	WaitAfterByte,
 }
 
-/// Errors returned by the Receiver
-#[derive(Debug, PartialEq)]
-pub enum Error {
-	IOError,
-	TimerError,
-}
-
 impl<DATA, CLK, TIM> Receiver<DATA, CLK, TIM>
 where
 	DATA: InputPin + OutputPin,
@@ -38,7 +32,7 @@ where
 	TIM: CountDown,
 	TIM::Time: From<Milliseconds<u32>>,
 {
-	/// Create a receiver using data, clock and ack lines
+	/// Create a receiver using data and clock lines
 	///
 	/// * `pin_data` - An InputPin + OutputPin that must be configured
 	///                as open drain output. If the pin is set to low,
@@ -63,18 +57,22 @@ where
 	fn reset(&mut self) {
 		self.buf = [0; 3];
 		self.bits_read = 0;
+		self.current_byte = 0;
 		self.state = State::Idle;
 	}
 
 	fn start_timeout(&mut self) -> Result<(), Error> {
 		self.state = State::WaitAfterByte;
 		self.timer
-			.try_start(8u32.milliseconds())
+			.try_start(8.milliseconds())
 			.map_err(|_| Error::TimerError)?;
 		Ok(())
 	}
 
 	pub fn read(&mut self) -> nb::Result<Msg, Error> {
+		// TODO: maybe replace the next ifs with a match on the state
+		// and store buf in state
+
 		// if we are waiting to finish an acknowledge,
 		// call `ack` method and only continue if it won't
 		// block anymore
@@ -101,7 +99,7 @@ where
 				0
 			};
 			// push bit into buffer
-			self.buf[self.current_byte] |= data << self.bits_read;
+			self.buf[self.current_byte as usize] |= data << self.bits_read;
 			self.bits_read += 1;
 		}
 		// save clock signal to detect next falling edge
@@ -116,6 +114,7 @@ where
 			let len = Msg::len_from_byte(self.buf[0]);
 			if self.current_byte >= len - 1 {
 				// reset buffer and return message
+				self.bits_read = 0;
 				self.current_byte = 0;
 				let msg = Msg::from_bytes(&self.buf);
 				self.buf = [0; 3];
@@ -132,16 +131,13 @@ where
 
 	pub fn ack(&mut self) -> nb::Result<(), Error> {
 		if self.state == State::WaitAcknowledge {
-			if self.timer.try_wait().is_ok() {
-				self.pin_data.try_set_low().map_err(|_| Error::IOError)?;
-				self.reset();
-				Ok(())
-			} else {
-				Err(nb::Error::WouldBlock)
-			}
+			self.timer.try_wait().map_err(|_| Error::IOError)?;
+			self.pin_data.try_set_low().map_err(|_| Error::IOError)?;
+			self.reset();
+			Ok(())
 		} else {
 			self.timer
-				.try_start(2u32.milliseconds())
+				.try_start(2.milliseconds())
 				.map_err(|_| Error::TimerError)?;
 			self.pin_data.try_set_high().map_err(|_| Error::IOError)?;
 			self.state = State::WaitAcknowledge;
@@ -152,55 +148,9 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use super::Receiver;
 	use crate::message::Msg;
-	use embedded_hal_mock::pin;
-	use pin::{Mock, State, Transaction};
-
-	use embedded_hal::timer::{Cancel, CountDown};
-	use embedded_time::rate::*;
-	struct MockTimer {
-		clock: Hertz<u64>,
-		count: u64,
-	}
-
-	impl MockTimer {
-		pub fn new(clock: Hertz<u64>) -> Self {
-			MockTimer { clock, count: 0 }
-		}
-	}
-
-	impl CountDown for MockTimer {
-		type Error = ();
-		type Time = Nanoseconds<u64>;
-
-		fn try_start<T: Into<Nanoseconds<u64>>>(&mut self, timeout: T) -> Result<(), Self::Error> {
-			self.count = timeout.into().0 * self.clock.0 / 1_000_000_000_u64;
-			Ok(())
-		}
-
-		fn try_wait(&mut self) -> nb::Result<(), Self::Error> {
-			if self.count > 0 {
-				self.count -= 1;
-			}
-			if self.count > 0 {
-				Err(nb::Error::WouldBlock)
-			} else {
-				Ok(())
-			}
-		}
-	}
-
-	impl Cancel for MockTimer {
-		fn try_cancel(&mut self) -> Result<(), Self::Error> {
-			if self.count > 0 {
-				self.count = 0;
-				Ok(())
-			} else {
-				Err(())
-			}
-		}
-	}
+	use crate::tests_mock::*;
 
 	// convert a vector of bytes to mocked pins that can be used
 	// to test a receiver
@@ -252,7 +202,7 @@ mod tests {
 		}
 	}
 
-	// test reading a single speed message
+	// test reading a single speed differenc differencee message
 	#[test]
 	fn single_diff() {
 		let (data, clk, timer, bits) = get_pin_states(vec![0x22, 0xf8], 0);

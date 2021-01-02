@@ -105,8 +105,8 @@ pub enum AnalogNumber {
 }
 
 impl FunctionGroupData {
-	fn function_position(f: Function) -> usize {
-		let n = f.to_usize().unwrap();
+	fn function_position(f: Function) -> u8 {
+		let n = f.to_u8().unwrap();
 		match n {
 			0 => 4,
 			1..=4 => n - 1,
@@ -204,7 +204,7 @@ impl Msg {
 	/// Get the length of a message given as command byte
 	///
 	/// Returns size in bytes (2 or 3)
-	pub fn len_from_byte(cmd: u8) -> usize {
+	pub fn len_from_byte(cmd: u8) -> u8 {
 		match cmd {
 			0x77 | 0x7B | 0x7F => 3,
 			_ => 2,
@@ -214,7 +214,7 @@ impl Msg {
 	/// Get the length of a message
 	///
 	/// Returns size in bytes (2 or 3)
-	pub fn len(&self) -> usize {
+	pub fn len(&self) -> u8 {
 		match self {
 			// only CV messages are 3 bytes long
 			Self::CVByteCheck { .. } | Self::CVBitManipulation { .. } | Self::CVByteSet { .. } => 3,
@@ -364,5 +364,58 @@ mod tests {
 				}
 			}
 		}
+	}
+
+	// test function group decoding and manipulation
+	#[test]
+	fn function_group_data() {
+		use super::Function::*;
+		let data: u8 = 0b1010_1010;
+		let mut group: FunctionGroupData = data.into();
+
+		assert_eq!(group.get(F0), false); // F0 should be at index 4
+		assert_eq!(group.get(F4), true);
+
+		assert_eq!(group.get(F5), false);
+		assert_eq!(group.get(F6), true);
+		assert_eq!(group.get(F7), false);
+		assert_eq!(group.get(F8), true);
+		assert_eq!(group.get(F9), false);
+		assert_eq!(group.get(F10), true);
+		assert_eq!(group.get(F11), false);
+		assert_eq!(group.get(F12), true);
+		group.set(F9, true);
+		group.set(F10, false);
+		let data: u8 = group.into();
+		assert_eq!(data, 0b1001_1010);
+		group.clear();
+		let data: u8 = group.into();
+		assert_eq!(data, 0x00);
+	}
+
+	// test for messages that need ack
+	#[test]
+	fn needs_ack() {
+		let msg = Msg::Unknown;
+		assert_eq!(msg.needs_ack(), false);
+		let msg = Msg::LocomotiveLoad(127);
+		assert_eq!(msg.needs_ack(), false);
+		let msg = Msg::CVByteCheck {
+			addr: 127,
+			value: 0xAA,
+		};
+		assert_eq!(msg.needs_ack(), true);
+		let msg = Msg::CVBitManipulation {
+			addr: 222,
+			check: false,
+			value: true,
+			position: 5,
+		};
+		assert_eq!(msg.needs_ack(), true);
+		let msg = Msg::CVByteSet {
+			addr: 130,
+			value: 0xBB,
+		};
+		assert_eq!(msg.needs_ack(), true);
 	}
 }
