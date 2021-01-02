@@ -36,8 +36,9 @@ where
 	///
 	/// * `pin_data` - An InputPin + OutputPin that must be configured
 	///                as open drain output. If the pin is set to low,
-	///                data can be read. If it is set to high, the line
-	///                will be pulled to GND.
+	///                the connection will be open and pulled up by an
+	///                external pull up. If it is set to high,
+	///                the line will be pulled down.
 	/// * `pin_clk`  - An InputPin used to read the clock line
 	///                (falling edge reads a bit from `pin_data`)
 	pub fn new(pin_data: DATA, pin_clk: CLK, timer: TIM) -> Self {

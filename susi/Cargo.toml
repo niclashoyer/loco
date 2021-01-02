@@ -8,8 +8,10 @@ edition = "2018"
 default = ["std"]
 std = []
 
+# patches needed to adapt to embedded-hal 1.0.0
 [patch.crates-io]
 embedded-hal-mock = { path = '../embedded-hal-mock' }
+drogue-embedded-timer = { path = "../drogue-embedded-timer" }
 
 [dependencies]
 embedded-hal = "1.0.0-alpha.4"
@@ -23,3 +25,5 @@ default-features = false
 
 [dev-dependencies]
 embedded-hal-mock = "0.8"
+linux-embedded-hal = "0.4.0-alpha.0"
+drogue-embedded-timer = "0.2.3"

@@ -46,8 +46,9 @@ where
 	///
 	/// * `pin_data` - An InputPin + OutputPin that must be configured
 	///                as open drain output. If the pin is set to low,
-	///                data can be read. If it is set to high, the line
-	///                will be pulled to GND.
+	///                the connection will be open and pulled up by an
+	///                external pull up. If it is set to high,
+	///                the line will be pulled down.
 	/// * `pin_clk`  - An OutputPin used as the clock line
 	///                (the receiver will read on falling edges).
 	pub fn new(pin_data: DATA, mut pin_clk: CLK, timer: TIM) -> Self {
@@ -118,10 +119,13 @@ where
 					let byte = self.buf[(self.bits_written / 8) as usize];
 					let mask = 1 << (self.bits_written % 8);
 					let is_high = byte & mask == mask;
+					// open drain output: setting to low will write "1" using
+					// external pull up. Setting to high will write "0" using
+					// internal connection to GND (pulling low).
 					if is_high {
-						self.pin_data.try_set_high().map_err(|_| Error::IOError)?;
-					} else {
 						self.pin_data.try_set_low().map_err(|_| Error::IOError)?;
+					} else {
+						self.pin_data.try_set_high().map_err(|_| Error::IOError)?;
 					}
 					self.timer
 						.try_start(HALF_CLK_PERIOD.microseconds())
@@ -153,10 +157,11 @@ mod tests {
 		let mut data_states = vec![];
 		for i in 0..bytes {
 			for j in 0..8 {
+				// open drain output: high / low is inversed
 				if (word[i] >> j) & 0x01 == 1 {
-					data_states.push(Transaction::set(State::High));
-				} else {
 					data_states.push(Transaction::set(State::Low));
+				} else {
+					data_states.push(Transaction::set(State::High));
 				}
 			}
 		}
