@@ -1,7 +1,7 @@
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 
-#[derive(Debug, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Clone, Debug, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum Function {
 	F0 = 0,
 	F1,
@@ -74,7 +74,7 @@ pub enum Function {
 	F68,
 }
 
-#[derive(Debug, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Clone, Debug, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum FunctionGroupNumber {
 	G1 = 1,
 	G2,
@@ -87,12 +87,12 @@ pub enum FunctionGroupNumber {
 	G9,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Clone, Debug, PartialEq, Copy)]
 pub struct FunctionGroupData {
 	data: u8,
 }
 
-#[derive(Debug, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Clone, Debug, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum AnalogNumber {
 	A0 = 0,
 	A1,
@@ -145,7 +145,7 @@ impl From<FunctionGroupData> for u8 {
 	}
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Direction {
 	Forward,
 	Backward,
@@ -168,7 +168,7 @@ impl Direction {
 	}
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Msg {
 	Noop,
 	TriggerPulse,

@@ -77,13 +77,8 @@ where
 		match self.state {
 			State::Idle => {
 				self.buf = msg.to_bytes();
-				self.last_clk = false;
-				self.bits_written = 0;
 				self.len = msg.len() as u8;
 				self.state = State::Writing;
-				self.timer
-					.try_start(HALF_CLK_PERIOD.microseconds())
-					.map_err(|_| Error::TimerError)?;
 				Err(nb::Error::WouldBlock)
 			}
 			State::Writing | State::Waiting => {
