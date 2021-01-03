@@ -26,4 +26,5 @@ default-features = false
 [dev-dependencies]
 embedded-hal-mock = "0.8"
 linux-embedded-hal = "0.4.0-alpha.0"
-drogue-embedded-timer = "0.2.3"
+drogue-embedded-timer = "0.2"
+thread-priority = "0.2"

@@ -1,5 +1,6 @@
 use linux_embedded_hal as hal;
 use std::thread;
+use thread_priority::*;
 
 mod wire;
 use wire::*;
@@ -27,6 +28,16 @@ embedded_countdown!(
 	}
 );
 
+fn set_realtime_priority(prio: u32) {
+	let thread_id = thread_native_id();
+	set_thread_priority_and_policy(
+		thread_id,
+		ThreadPriority::Specific(prio),
+		ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::RoundRobin),
+	)
+	.unwrap();
+}
+
 type SusiSender = susi::sender::Sender<OpenDrainPin, PushPullPin, UsToStdCountDown<SysTimer>>;
 type SusiReceiver =
 	susi::receiver::Receiver<OpenDrainPin, InputOnlyPin, MsToStdCountDown<SysTimer>>;
@@ -49,14 +60,15 @@ where
 	let receiver_pin_data = wire_data.as_open_drain_pin();
 
 	let sender = thread::spawn(move || {
+		set_realtime_priority(90);
 		let timer = hal::SysTimer::new();
 		let timer = UsToStdCountDown::from(timer);
 		let sender = susi::sender::Sender::new(sender_pin_data, sender_pin_clk, timer);
-
 		sleep(Duration::from_millis(200));
 		send(sender)
 	});
 	let receiver = thread::spawn(move || {
+		set_realtime_priority(80);
 		let timer = hal::SysTimer::new();
 		let timer = MsToStdCountDown::from(timer);
 		let receiver = susi::receiver::Receiver::new(receiver_pin_data, receiver_pin_clk, timer);
@@ -77,7 +89,6 @@ fn send_and_receive_messages(msgs: Vec<Msg>) {
 		send_msgs.reverse();
 		sleep(Duration::from_millis(200));
 		while let Some(msg) = send_msgs.pop() {
-			println!("sending {:?} as {:?}", msg, msg.to_bytes());
 			loop {
 				let res = sender.write(&msg);
 				if let Ok(_) = res {
@@ -85,6 +96,7 @@ fn send_and_receive_messages(msgs: Vec<Msg>) {
 				} else if res != Err(nb::Error::WouldBlock) {
 					panic!(res);
 				}
+				sleep(Duration::from_micros(50));
 			}
 		}
 	};
@@ -104,6 +116,7 @@ fn send_and_receive_messages(msgs: Vec<Msg>) {
 			} else if res != Err(nb::Error::WouldBlock) {
 				panic!(res);
 			}
+			sleep(Duration::from_micros(50));
 		}
 	};
 
