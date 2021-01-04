@@ -33,6 +33,7 @@ enum State {
 	Writing,
 	Waiting,
 	WaitingForAck,
+	WaitingForReset,
 }
 
 impl<DATA, CLK, TIM> Sender<DATA, CLK, TIM>
@@ -87,13 +88,6 @@ where
 						.try_wait()
 						.map_err(|e| e.map(|_| Error::TimerError))?;
 					self.state = State::Writing;
-				}
-				if self.last_clk {
-					// last clk was high, so we just need a falling edge
-					// so that receivers can read our bit
-					self.pin_clk.try_set_low().map_err(|_| Error::IOError)?;
-					self.last_clk = false;
-					self.bits_written += 1;
 					if self.bits_written == self.len * 8 {
 						if msg.needs_ack() {
 							self.state = State::WaitingForAck;
@@ -102,6 +96,13 @@ where
 							return Ok(SenderResult::None);
 						}
 					}
+				}
+				if self.last_clk {
+					// last clk was high, so we just need a falling edge
+					// so that receivers can read our bit
+					self.pin_clk.try_set_low().map_err(|_| Error::IOError)?;
+					self.last_clk = false;
+					self.bits_written += 1;
 					self.timer
 						.try_start(HALF_CLK_PERIOD.microseconds())
 						.map_err(|_| Error::TimerError)?;
@@ -131,6 +132,10 @@ where
 			}
 			State::WaitingForAck => {
 				panic!("ACK not implemented")
+			}
+			State::WaitingForReset => {
+				// TODO: implement reset delay after 20 commands (as per spec)
+				Err(nb::Error::WouldBlock)
 			}
 		}
 	}

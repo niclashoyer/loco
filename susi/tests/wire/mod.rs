@@ -1,10 +1,13 @@
 use embedded_hal::digital::{InputPin, OutputPin};
+use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::{FromPrimitive, ToPrimitive};
 use std::convert::Infallible;
-use std::sync::{Arc, RwLock};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum WireState {
-	Low,
+	Low = 1,
 	High,
 	Floating,
 }
@@ -13,7 +16,7 @@ impl Copy for WireState {}
 
 #[derive(Clone, Debug)]
 pub struct Wire {
-	state: Arc<RwLock<WireState>>,
+	state: Arc<AtomicUsize>,
 	pull: WireState,
 }
 
@@ -24,17 +27,18 @@ impl Wire {
 
 	pub fn new_with_pull(pull: WireState) -> Self {
 		Self {
-			state: Arc::new(RwLock::new(WireState::Floating)),
+			state: Arc::new(AtomicUsize::new(WireState::Floating as usize)),
 			pull,
 		}
 	}
 
 	pub fn set_state(&mut self, state: WireState) {
-		*self.state.write().unwrap() = state;
+		self.state
+			.store(state.to_usize().unwrap(), Ordering::Relaxed);
 	}
 
 	pub fn get_state(&self) -> WireState {
-		let s = *self.state.read().unwrap();
+		let s = WireState::from_usize(self.state.load(Ordering::Relaxed)).unwrap();
 		if s == WireState::Floating {
 			self.pull
 		} else {

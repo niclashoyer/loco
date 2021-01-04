@@ -194,7 +194,7 @@ pub enum Msg {
 		addr: u8,
 		value: u8,
 	},
-	Unknown,
+	Unknown([u8; 3]),
 }
 
 static MASK7: u8 = 0b01111111;
@@ -218,6 +218,8 @@ impl Msg {
 		match self {
 			// only CV messages are 3 bytes long
 			Self::CVByteCheck { .. } | Self::CVBitManipulation { .. } | Self::CVByteSet { .. } => 3,
+			// unknown is always full length, since we don't know
+			Self::Unknown(_) => 3,
 			_ => 2,
 		}
 	}
@@ -254,7 +256,7 @@ impl Msg {
 				if (addr & 0x80) == 0x80 {
 					Msg::CVByteCheck { addr, value }
 				} else {
-					Msg::Unknown
+					Msg::Unknown(*bytes)
 				}
 			}
 			[123, addr, data] => {
@@ -266,17 +268,17 @@ impl Msg {
 						position: data & 0x07,
 					}
 				} else {
-					Msg::Unknown
+					Msg::Unknown(*bytes)
 				}
 			}
 			[127, addr, value] => {
 				if (addr & 0x80) == 0x80 {
 					Msg::CVByteSet { addr, value }
 				} else {
-					Msg::Unknown
+					Msg::Unknown(*bytes)
 				}
 			}
-			_ => Msg::Unknown,
+			_ => Msg::Unknown(*bytes),
 		}
 	}
 
@@ -306,7 +308,7 @@ impl Msg {
 				0xE0 | ((*check as u8) << 4) | ((*value as u8) << 3) | (position & 0x07),
 			],
 			Msg::CVByteSet { addr, value } => [127, 0x80 | (addr & MASK7), *value],
-			Msg::Unknown => [0x00, 0x00, 0x00],
+			Msg::Unknown(bytes) => *bytes,
 		}
 	}
 }
@@ -356,11 +358,7 @@ mod tests {
 						_ => {}
 					}
 					let buf2 = msg.to_bytes();
-					if msg != Msg::Unknown {
-						assert_eq!(buf, buf2);
-					} else {
-						assert_eq!([0x00, 0x00, 0x00], buf2);
-					}
+					assert_eq!(buf, buf2);
 				}
 			}
 		}
@@ -396,7 +394,7 @@ mod tests {
 	// test for messages that need ack
 	#[test]
 	fn needs_ack() {
-		let msg = Msg::Unknown;
+		let msg = Msg::Unknown([0; 3]);
 		assert_eq!(msg.needs_ack(), false);
 		let msg = Msg::LocomotiveLoad(127);
 		assert_eq!(msg.needs_ack(), false);

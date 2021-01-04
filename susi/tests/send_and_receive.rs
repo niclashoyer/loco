@@ -33,7 +33,7 @@ fn set_realtime_priority(prio: u32) {
 	set_thread_priority_and_policy(
 		thread_id,
 		ThreadPriority::Specific(prio),
-		ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::Fifo),
+		ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::RoundRobin),
 	)
 	.unwrap_or_else(|_| {
 		eprintln!("WARNING: no realtime scheduling possible, the integration tests might fail!");
@@ -76,8 +76,9 @@ where
 		let receiver = susi::receiver::Receiver::new(receiver_pin_data, receiver_pin_clk, timer);
 		receive(receiver)
 	});
+	let rec = receiver.join().unwrap();
 	sender.join().unwrap();
-	receiver.join().unwrap()
+	rec
 }
 
 fn send_and_receive_messages(msgs: Vec<Msg>) {
@@ -98,7 +99,15 @@ fn send_and_receive_messages(msgs: Vec<Msg>) {
 				} else if res != Err(nb::Error::WouldBlock) {
 					panic!(res);
 				}
-				yield_now();
+				let slept = std::time::Instant::now();
+				sleep(Duration::from_micros(50));
+				let slept = slept.elapsed().as_micros();
+				if slept > 200 {
+					eprintln!(
+						"WARNING: sender slept {} µs, more than 200 µs will cause problems",
+						slept
+					);
+				}
 			}
 		}
 	};
@@ -107,7 +116,7 @@ fn send_and_receive_messages(msgs: Vec<Msg>) {
 		let mut recv = vec![];
 		loop {
 			if start.elapsed().as_millis() > 2000 {
-				panic!("receiver timed out");
+				panic!("receiver timed out - buf: {:?}", recv);
 			}
 			let res = receiver.read();
 			if let Ok(msg) = res {
@@ -118,7 +127,15 @@ fn send_and_receive_messages(msgs: Vec<Msg>) {
 			} else if res != Err(nb::Error::WouldBlock) {
 				panic!(res);
 			}
-			yield_now();
+			let slept = std::time::Instant::now();
+			sleep(Duration::from_micros(50));
+			let slept = slept.elapsed().as_micros();
+			if slept > 200 {
+				eprintln!(
+					"WARNING: receiver slept {} µs, more than 200 µs will cause problems",
+					slept
+				);
+			}
 		}
 	};
 
@@ -126,15 +143,29 @@ fn send_and_receive_messages(msgs: Vec<Msg>) {
 	assert_eq!(recv, msgs);
 }
 
+use serial_test::serial;
+
 #[test]
+#[serial]
 fn single_message() {
 	send_and_receive_messages(vec![Msg::LocomotiveSpeed(Direction::Forward, 120)]);
 }
 
 #[test]
+#[serial]
 fn two_messages() {
 	send_and_receive_messages(vec![
 		Msg::LocomotiveSpeed(Direction::Forward, 120),
-		Msg::LocomotiveSpeed(Direction::Backward, 20),
+		Msg::LocomotiveSpeed(Direction::Forward, 120),
+	]);
+}
+
+#[test]
+#[serial]
+fn three_messages() {
+	send_and_receive_messages(vec![
+		Msg::LocomotiveSpeed(Direction::Forward, 120),
+		Msg::LocomotiveSpeed(Direction::Forward, 120),
+		Msg::LocomotiveSpeed(Direction::Forward, 120),
 	]);
 }
