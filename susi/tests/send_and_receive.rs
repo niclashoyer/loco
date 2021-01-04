@@ -33,7 +33,7 @@ fn set_realtime_priority(prio: u32) {
 	set_thread_priority_and_policy(
 		thread_id,
 		ThreadPriority::Specific(prio),
-		ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::RoundRobin),
+		ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::Fifo),
 	)
 	.unwrap_or_else(|_| {
 		eprintln!("WARNING: no realtime scheduling possible, the integration tests might fail!");
@@ -62,7 +62,7 @@ where
 	let receiver_pin_data = wire_data.as_open_drain_pin();
 
 	let sender = thread::spawn(move || {
-		set_realtime_priority(90);
+		set_realtime_priority(80);
 		let timer = hal::SysTimer::new();
 		let timer = UsToStdCountDown::from(timer);
 		let sender = susi::sender::Sender::new(sender_pin_data, sender_pin_clk, timer);
@@ -70,7 +70,7 @@ where
 		send(sender)
 	});
 	let receiver = thread::spawn(move || {
-		set_realtime_priority(80);
+		set_realtime_priority(90);
 		let timer = hal::SysTimer::new();
 		let timer = MsToStdCountDown::from(timer);
 		let receiver = susi::receiver::Receiver::new(receiver_pin_data, receiver_pin_clk, timer);
@@ -81,7 +81,7 @@ where
 }
 
 fn send_and_receive_messages(msgs: Vec<Msg>) {
-	use std::thread::sleep;
+	use std::thread::{sleep, yield_now};
 	use std::time::Duration;
 
 	let mut send_msgs = msgs.clone();
@@ -98,7 +98,7 @@ fn send_and_receive_messages(msgs: Vec<Msg>) {
 				} else if res != Err(nb::Error::WouldBlock) {
 					panic!(res);
 				}
-				sleep(Duration::from_micros(50));
+				yield_now();
 			}
 		}
 	};
@@ -118,7 +118,7 @@ fn send_and_receive_messages(msgs: Vec<Msg>) {
 			} else if res != Err(nb::Error::WouldBlock) {
 				panic!(res);
 			}
-			sleep(Duration::from_micros(50));
+			yield_now();
 		}
 	};
 
