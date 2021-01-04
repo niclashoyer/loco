@@ -35,7 +35,9 @@ fn set_realtime_priority(prio: u32) {
 		ThreadPriority::Specific(prio),
 		ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::RoundRobin),
 	)
-	.unwrap();
+	.unwrap_or_else(|_| {
+		eprintln!("WARNING: no realtime scheduling possible, the integration tests might fail!");
+	});
 }
 
 type SusiSender = susi::sender::Sender<OpenDrainPin, PushPullPin, UsToStdCountDown<SysTimer>>;

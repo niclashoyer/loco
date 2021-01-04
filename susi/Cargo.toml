@@ -10,8 +10,8 @@ std = []
 
 # patches needed to adapt to embedded-hal 1.0.0
 [patch.crates-io]
-embedded-hal-mock = { path = '../embedded-hal-mock' }
-drogue-embedded-timer = { path = "../drogue-embedded-timer" }
+embedded-hal-mock = { git = "https://github.com/niclashoyer/embedded-hal-mock", branch = "hal-1.0.0" }
+drogue-embedded-timer = { git = "https://github.com/niclashoyer/drogue-embedded-timer", branch = "hal-1.0.0" }
 
 [dependencies]
 embedded-hal = "1.0.0-alpha.4"
