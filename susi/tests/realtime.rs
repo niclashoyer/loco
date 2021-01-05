@@ -1,13 +1,48 @@
-mod simulation;
-mod wire;
-use simulation::*;
+use linux_embedded_hal as hal;
+use std::thread;
+use thread_priority::*;
 
+mod wire;
+use wire::*;
+
+use drogue_embedded_timer::embedded_countdown;
+use embedded_hal::timer::CountDown;
+use hal::SysTimer;
 use susi::message::{Direction, Msg};
 
-use embedded_time::duration::*;
+embedded_countdown!(
+	MsToStdCountDown,
+	embedded_time::duration::Milliseconds,
+	std::time::Duration
+	=> (ms) {
+		std::time::Duration::from_millis(ms.0 as u64)
+	}
+);
 
-type SusiSender = susi::sender::Sender<OpenDrainPin, PushPullPin, SimTimer>;
-type SusiReceiver = susi::receiver::Receiver<OpenDrainPin, InputOnlyPin, SimTimer>;
+embedded_countdown!(
+	UsToStdCountDown,
+	embedded_time::duration::Microseconds,
+	std::time::Duration
+	=> (us) {
+		std::time::Duration::from_micros(us.0 as u64)
+	}
+);
+
+fn set_realtime_priority(prio: u32) {
+	let thread_id = thread_native_id();
+	set_thread_priority_and_policy(
+		thread_id,
+		ThreadPriority::Specific(prio),
+		ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::RoundRobin),
+	)
+	.unwrap_or_else(|_| {
+		eprintln!("WARNING: no realtime scheduling possible, the integration tests might fail!");
+	});
+}
+
+type SusiSender = susi::sender::Sender<OpenDrainPin, PushPullPin, UsToStdCountDown<SysTimer>>;
+type SusiReceiver =
+	susi::receiver::Receiver<OpenDrainPin, InputOnlyPin, MsToStdCountDown<SysTimer>>;
 
 fn send_and_receive<FS: 'static, FR: 'static>(send: FS, receive: FR) -> Vec<Msg>
 where
