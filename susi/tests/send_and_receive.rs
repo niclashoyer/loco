@@ -16,8 +16,8 @@ fn send_and_receive<FS: 'static, FR: 'static>(
 	timeout: u32,
 ) -> Vec<Msg>
 where
-	FS: FnMut(&mut SusiSender) -> nb::Result<(), Error>,
-	FR: FnMut(&mut SusiReceiver) -> nb::Result<Vec<Msg>, Error>,
+	FS: FnMut(&mut SusiSender, &SimClock) -> nb::Result<(), Error>,
+	FR: FnMut(&mut SusiReceiver, &SimClock) -> nb::Result<Vec<Msg>, Error>,
 {
 	let wire_clk = Wire::new();
 	let wire_data = Wire::new_with_pull(WireState::High);
@@ -45,13 +45,13 @@ where
 			panic!("simulation timed out");
 		}
 		if !sender_done {
-			if let Ok(_) = send(&mut sender) {
+			if let Ok(_) = send(&mut sender, &clock) {
 				sender_done = true;
 				println!("sender done");
 			}
 		}
 		if !receiver_done {
-			if let Ok(msgs) = receive(&mut receiver) {
+			if let Ok(msgs) = receive(&mut receiver, &clock) {
 				recv = msgs;
 				receiver_done = true;
 				println!("receiver done");
@@ -72,7 +72,7 @@ fn send_and_receive_messages(msgs: Vec<Msg>) {
 	let mut msg = send_msgs.pop().expect("at least one message must be sent");
 	let mut recv = vec![];
 
-	let sender = move |sender: &mut SusiSender| {
+	let sender = move |sender: &mut SusiSender, _clock: &SimClock| {
 		let res = sender.write(&msg);
 		if let Ok(_) = res {
 			if send_msgs.is_empty() {
@@ -85,7 +85,7 @@ fn send_and_receive_messages(msgs: Vec<Msg>) {
 		}
 		Err(nb::Error::WouldBlock)
 	};
-	let receiver = move |receiver: &mut SusiReceiver| {
+	let receiver = move |receiver: &mut SusiReceiver, _clock: &SimClock| {
 		let res = receiver.read();
 		if let Ok(msg) = res {
 			recv.push(msg);
@@ -102,16 +102,12 @@ fn send_and_receive_messages(msgs: Vec<Msg>) {
 	assert_eq!(recv, msgs);
 }
 
-use serial_test::serial;
-
 #[test]
-#[serial]
 fn single_message() {
 	send_and_receive_messages(vec![Msg::LocomotiveSpeed(Direction::Forward, 120)]);
 }
 
 #[test]
-#[serial]
 fn two_messages() {
 	send_and_receive_messages(vec![
 		Msg::LocomotiveSpeed(Direction::Forward, 120),
@@ -120,11 +116,82 @@ fn two_messages() {
 }
 
 #[test]
-#[serial]
 fn three_messages() {
 	send_and_receive_messages(vec![
 		Msg::LocomotiveSpeed(Direction::Forward, 120),
 		Msg::LocomotiveSpeed(Direction::Forward, 120),
 		Msg::LocomotiveSpeed(Direction::Forward, 120),
 	]);
+}
+
+#[test]
+fn timing_issues() {
+	let mut send_msgs = vec![
+		Msg::LocomotiveSpeed(Direction::Forward, 10),
+		Msg::LocomotiveSpeed(Direction::Forward, 20),
+		Msg::LocomotiveSpeed(Direction::Forward, 30),
+	];
+	send_msgs.reverse();
+	let mut msg = send_msgs.pop().unwrap();
+	let mut recv = vec![];
+	let mut shift = None;
+	let mut reset = None;
+
+	let sender = move |sender: &mut SusiSender, clock: &SimClock| {
+		if reset.is_none() {
+			if let Some(s) = shift {
+				// send for ~2ms, then reset (corrupting the second message)
+				if (clock.elapsed() - s) > 2_u32.milliseconds() {
+					reset = Some(clock.elapsed());
+					shift = None;
+					return Err(nb::Error::WouldBlock);
+				}
+			}
+			let res = sender.write(&msg);
+			if let Ok(_) = res {
+				if send_msgs.is_empty() {
+					return Ok(());
+				} else {
+					msg = send_msgs.pop().unwrap();
+					if send_msgs.len() == 1 {
+						// one message left, lets corrupt the timing while sending
+						shift = Some(clock.elapsed());
+					}
+					if send_msgs.len() == 0 {
+						// no message left, reset now to get the last message right again
+						reset = Some(clock.elapsed());
+					}
+				}
+			} else if res != Err(nb::Error::WouldBlock) {
+				panic!(res);
+			}
+		} else {
+			// wait at least 10 ms to reset the receiver
+			if (clock.elapsed() - reset.unwrap()) > 10_u32.milliseconds() {
+				reset = None;
+			}
+		}
+		Err(nb::Error::WouldBlock)
+	};
+	let receiver = move |receiver: &mut SusiReceiver, _clock: &SimClock| {
+		let res = receiver.read();
+		if let Ok(msg) = res {
+			recv.push(msg);
+			if recv.len() == 2 {
+				return Ok(recv.clone());
+			}
+		} else if res != Err(nb::Error::WouldBlock) {
+			panic!(res);
+		}
+		Err(nb::Error::WouldBlock)
+	};
+
+	let recv = send_and_receive(sender, receiver, 500);
+	assert_eq!(
+		recv,
+		vec![
+			Msg::LocomotiveSpeed(Direction::Forward, 10),
+			Msg::LocomotiveSpeed(Direction::Forward, 30),
+		]
+	);
 }

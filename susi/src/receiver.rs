@@ -71,9 +71,6 @@ where
 	}
 
 	pub fn read(&mut self) -> nb::Result<Msg, Error> {
-		// TODO: maybe replace the next ifs with a match on the state
-		// and store buf in state
-
 		// if we are waiting to finish an acknowledge,
 		// call `ack` method and only continue if it won't
 		// block anymore
@@ -82,7 +79,8 @@ where
 		}
 		// if we are not in idle state, check if the timer
 		// finished to sync again
-		if self.state != State::Idle && self.timer.try_wait().is_ok() {
+		if self.state == State::WaitAfterByte && self.timer.try_wait().is_ok() {
+			println!("reset");
 			self.reset();
 		}
 		// get current clock signal

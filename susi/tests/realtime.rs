@@ -82,7 +82,7 @@ where
 }
 
 fn send_and_receive_messages(msgs: Vec<Msg>) {
-	use std::thread::{sleep, yield_now};
+	use std::thread::sleep;
 	use std::time::Duration;
 
 	let mut send_msgs = msgs.clone();
