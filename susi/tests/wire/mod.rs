@@ -51,6 +51,8 @@ impl Wire {
 
 	pub fn set_state(&mut self, id: PinId, state: WireState) {
 		self.wire.lock().unwrap().state[id] = state;
+		// check for short circuit
+		let _ = self.get_state();
 	}
 
 	pub fn get_state(&self) -> WireState {
@@ -173,5 +175,68 @@ impl OutputPin for OpenDrainPin {
 	fn try_set_high(&mut self) -> Result<(), Self::Error> {
 		self.wire.set_state(self.id, WireState::Low);
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use WireState::*;
+
+	#[test]
+	fn init() {
+		let wire = Wire::new();
+		assert_eq!(Floating, wire.get_state());
+		let wire = Wire::new_with_pull(High);
+		assert_eq!(High, wire.get_state());
+	}
+
+	#[test]
+	fn pull_up() {
+		let wire = Wire::new_with_pull(High);
+		let mut pin = wire.as_open_drain_pin();
+		assert_eq!(High, wire.get_state());
+		assert_eq!(Ok(()), pin.try_set_high());
+		assert_eq!(Low, wire.get_state());
+	}
+
+	#[test]
+	fn pull_down() {
+		let wire = Wire::new_with_pull(Low);
+		let mut pin = wire.as_push_pull_pin();
+		assert_eq!(Low, wire.get_state());
+		assert_eq!(Ok(()), pin.try_set_high());
+		assert_eq!(High, wire.get_state());
+		assert_eq!(Ok(()), pin.try_set_low());
+		assert_eq!(Low, wire.get_state());
+	}
+
+	#[test]
+	fn input() {
+		let wire = Wire::new();
+		let mut pin_out = wire.as_push_pull_pin();
+		let pin_in = wire.as_input_pin();
+		assert_eq!(Floating, wire.get_state());
+		assert_eq!(Ok(false), pin_in.try_is_high());
+		assert_eq!(Ok(false), pin_in.try_is_low());
+		assert_eq!(Ok(()), pin_out.try_set_low());
+		assert_eq!(Low, wire.get_state());
+		assert_eq!(Ok(false), pin_in.try_is_high());
+		assert_eq!(Ok(true), pin_in.try_is_low());
+		assert_eq!(Ok(()), pin_out.try_set_high());
+		assert_eq!(High, wire.get_state());
+		assert_eq!(Ok(true), pin_in.try_is_high());
+		assert_eq!(Ok(false), pin_in.try_is_low());
+	}
+
+	#[test]
+	#[should_panic]
+	fn short_circuit() {
+		let wire = Wire::new();
+		let mut pin1 = wire.as_push_pull_pin();
+		let mut pin2 = wire.as_push_pull_pin();
+		assert_eq!(Ok(()), pin1.try_set_high());
+		// this will cause a short circuit and panic
+		assert_eq!(Ok(()), pin2.try_set_low());
 	}
 }
