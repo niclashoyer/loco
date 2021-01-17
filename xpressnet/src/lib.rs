@@ -1,0 +1,93 @@
+use bitflags::bitflags;
+use heapless::consts::U17;
+use heapless::Vec;
+
+pub trait Bits<T>: Copy {
+	fn bits(&self) -> T;
+}
+
+bitflags! {
+	pub struct CentralState: u8 {
+		const EMERGENCY_OFF = 0b0000_0001;
+		const EMERGENCY_STOP = 0b0000_0010;
+		const AUTOMATIC_START = 0b0000_0100;
+		const SERVICE_MODE = 0b0000_1000;
+		const POWER_UP = 0b0100_0000;
+		const RAM_ERROR = 0b1000_0000;
+	}
+}
+
+impl Bits<u8> for CentralState {
+	fn bits(&self) -> u8 {
+		self.bits
+	}
+}
+
+#[derive(Debug)]
+pub struct MessageBytes {
+	bytes: Vec<u8, U17>,
+}
+
+impl MessageBytes {
+	fn from_slice(slice: &[u8]) -> Self {
+		Self {
+			bytes: Vec::<_, _>::from_slice(slice).unwrap(),
+		}
+	}
+
+	fn xor(&self) -> u8 {
+		let mut iter = self.bytes[0..].iter();
+		let mut xor = *iter.next().unwrap();
+		for byte in iter {
+			xor = xor ^ byte;
+		}
+		xor
+	}
+}
+
+#[derive(Debug)]
+pub enum CentralMessage<S: Bits<u8>> {
+	TrackPowerOn,
+	TrackPowerOff,
+	EmergencyStop,
+	//FeedbackBroadcast([(u8, u8); 7])
+	Version(u8, u8),
+	State(S),
+	TransferError,
+	StationBusy,
+	UnknownCommand,
+}
+
+#[derive(Debug)]
+pub enum DeviceMessage {
+	VersionRequest,
+	StatusRequest,
+}
+
+macro_rules! xor {
+	( [$x:expr, $( $y:expr ),*] ) => {
+		[$x,$( $y ),*,$x $( ^$y )*]
+	}
+}
+
+macro_rules! mb {
+	( $x:expr ) => {
+		MessageBytes::from_slice(&$x)
+	};
+}
+
+impl<S: Bits<u8>> CentralMessage<S> {
+	pub fn to_bytes(&self) -> MessageBytes {
+		use CentralMessage::*;
+		match self {
+			&TrackPowerOn => mb!(xor!([0x61, 0x01])),
+			&TrackPowerOff => mb!(xor!([0x61, 0x00])),
+			&EmergencyStop => mb!(xor!([0x81, 0x00])),
+			&Version(u, l) => mb!(xor!([0x63, 0x21, u, l])),
+			&State(state) => mb!(xor!([0x62, 0x22, state.bits()])),
+			&TransferError => mb!(xor!([0x61, 0x80])),
+			&StationBusy => mb!(xor!([0x61, 0x81])),
+			&UnknownCommand => mb!(xor!([0x61, 0x82])),
+		}
+	}
+}

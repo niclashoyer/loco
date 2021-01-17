@@ -1,0 +1,14 @@
+[package]
+name = "loco-xpressnet"
+version = "0.1.0"
+authors = ["Niclas Hoyer <info@niclashoyer.de>"]
+edition = "2018"
+
+[features]
+z21 = []
+
+[dependencies]
+heapless = "0.5"
+bitflags = "1.2"
+
+[dev-dependencies]
