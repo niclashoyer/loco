@@ -1,0 +1,21 @@
+[package]
+name = "loco-z21"
+version = "0.1.0"
+authors = ["Niclas Hoyer <info@niclashoyer.de>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[patch.crates-io]
+loco-xpressnet = { path = "../loco-xpressnet" }
+std-embedded-nal = { path = "../std-embedded-nal" }
+
+[dependencies]
+embedded-nal = "0.2"
+bitflags = "1.2"
+loco-xpressnet = "0.1"
+nb = "1.0"
+#std-embedded-nal = { git = "https://gitlab.com/chrysn/std-embedded-nal", branch = "embedded-nal-v0.2.0" }
+std-embedded-nal = "*"
+
+[dev-dependencies]
