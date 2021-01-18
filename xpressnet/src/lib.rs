@@ -59,9 +59,8 @@ pub enum CentralMessage<S: Bits<u8>> {
 }
 
 #[derive(Debug)]
-pub enum DeviceMessage {
-	VersionRequest,
-	StatusRequest,
+pub enum Error {
+	ParseError,
 }
 
 macro_rules! xor {
@@ -88,6 +87,23 @@ impl<S: Bits<u8>> CentralMessage<S> {
 			&TransferError => mb!(xor!([0x61, 0x80])),
 			&StationBusy => mb!(xor!([0x61, 0x81])),
 			&UnknownCommand => mb!(xor!([0x61, 0x82])),
+		}
+	}
+}
+
+#[derive(Debug)]
+pub enum DeviceMessage {
+	GetVersion,
+	GetState,
+}
+
+impl DeviceMessage {
+	pub fn from_bytes(bytes: &[u8]) -> Result<DeviceMessage, Error> {
+		use DeviceMessage::*;
+		match bytes {
+			&[0x21, 0x21, 0x00, ..] => Ok(GetVersion),
+			&[0x21, 0x24, 0x05, ..] => Ok(GetState),
+			_ => Err(Error::ParseError),
 		}
 	}
 }
