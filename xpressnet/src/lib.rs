@@ -104,7 +104,10 @@ impl DeviceMessage {
 		match bytes {
 			&[0x21, 0x21, 0x00, ..] => Ok(GetVersion),
 			&[0x21, 0x24, 0x05, ..] => Ok(GetState),
-			_ => Err(Error::ParseError),
+			_ => {
+				println!("X: {:#04X?}", bytes);
+				Err(Error::ParseError)
+			}
 		}
 	}
 }
