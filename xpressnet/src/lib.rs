@@ -70,23 +70,24 @@ macro_rules! xor {
 }
 
 macro_rules! mb {
-	( $x:expr ) => {
-		MessageBytes::from_slice(&$x)
-	};
+	( $b:ident[$p:expr] <= $($x:tt)* ) => {{
+		$b[$p].copy_from_slice($($x)*);
+		$b[$p].len()
+	}};
 }
 
 impl<S: Bits<u8>> CentralMessage<S> {
-	pub fn to_bytes(&self) -> MessageBytes {
+	pub fn to_buf(&self, buf: &mut [u8]) -> usize {
 		use CentralMessage::*;
 		match self {
-			&TrackPowerOn => mb!(xor!([0x61, 0x01])),
-			&TrackPowerOff => mb!(xor!([0x61, 0x00])),
-			&EmergencyStop => mb!(xor!([0x81, 0x00])),
-			&Version(u, l) => mb!(xor!([0x63, 0x21, u, l])),
-			&State(state) => mb!(xor!([0x62, 0x22, state.bits()])),
-			&TransferError => mb!(xor!([0x61, 0x80])),
-			&StationBusy => mb!(xor!([0x61, 0x81])),
-			&UnknownCommand => mb!(xor!([0x61, 0x82])),
+			&TrackPowerOn => mb!(buf[0..3] <= &xor!([0x61, 0x01])),
+			&TrackPowerOff => mb!(buf[0..3] <= &xor!([0x61, 0x00])),
+			&EmergencyStop => mb!(buf[0..3] <= &xor!([0x81, 0x00])),
+			&Version(u, l) => mb!(buf[0..5] <= &xor!([0x63, 0x21, u, l])),
+			&State(state) => mb!(buf[0..4] <= &xor!([0x62, 0x22, state.bits()])),
+			&TransferError => mb!(buf[0..3] <= &xor!([0x61, 0x80])),
+			&StationBusy => mb!(buf[0..3] <= &xor!([0x61, 0x81])),
+			&UnknownCommand => mb!(buf[0..3] <= &xor!([0x61, 0x82])),
 		}
 	}
 }
