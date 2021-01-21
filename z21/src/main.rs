@@ -76,6 +76,13 @@ enum CentralMessage {
 	XpressNet(xnet::CentralMessage<CentralState>),
 }
 
+macro_rules! mov {
+	( $b:ident[$p:expr] <= $($x:tt)* ) => {{
+		$b[$p].copy_from_slice($($x)*);
+		$b[$p].len()
+	}};
+}
+
 impl CentralMessage {
 	pub fn to_buf(&self, buf: &mut [u8]) -> usize {
 		use CentralMessage::*;
@@ -90,66 +97,30 @@ impl CentralMessage {
 				central_state,
 				central_state_ex,
 			} => {
-				buf[0] = 0x14;
-				buf[1] = 0x00;
-				buf[2] = 0x84;
-				buf[3] = 0x00;
-				(&mut buf[4..6]).put_i16_le(*main_current);
-				(&mut buf[6..8]).put_i16_le(*prog_current);
-				(&mut buf[8..10]).put_i16_le(*filtered_main_current);
-				(&mut buf[10..12]).put_i16_le(*temperature);
-				(&mut buf[12..14]).put_u16_le(*supply_voltage);
-				(&mut buf[14..16]).put_u16_le(*vcc_voltage);
-				buf[16] = central_state.bits;
-				buf[17] = central_state_ex.bits;
-				buf[18] = 0x00;
-				buf[19] = 0x00;
+				mov!(buf[0..=3] <= &[0x14, 0x00, 0x84, 0x00]);
+				mov!(buf[4..=5] <= &main_current.to_le_bytes());
+				mov!(buf[6..=7] <= &prog_current.to_le_bytes());
+				mov!(buf[8..=9] <= &filtered_main_current.to_le_bytes());
+				mov!(buf[10..=11] <= &temperature.to_le_bytes());
+				mov!(buf[12..=13] <= &supply_voltage.to_le_bytes());
+				mov!(buf[14..=15] <= &vcc_voltage.to_le_bytes());
+				mov!(buf[16..=19] <= &[central_state.bits, central_state_ex.bits, 0x00, 0x00]);
 				20
 			}
 			SerialNumber(num) => {
-				buf[0] = 0x10;
-				buf[1] = 0x11;
-				(&mut buf[2..6]).put_u32_le(*num);
+				mov!(buf[0..=1] <= &[0x10, 0x11]);
+				mov!(buf[2..=5] <= &num.to_le_bytes());
 				6
 			}
 			XpressNet(xmsg) => {
-				buf[2] = 0x40;
-				buf[3] = 0x00;
+				mov!(buf[2..=3] <= &[0x40, 0x00]);
 				let xnum = xmsg.to_buf(&mut buf[4..]);
 				let size = 4 + xnum;
-				buf[0..2].copy_from_slice(&(size as u16).to_le_bytes());
+				mov!(buf[0..=1] <= &(size as u16).to_le_bytes());
 				size
 			}
 			_ => unimplemented!(),
 		}
-	}
-}
-
-trait BufMut {
-	fn put_i16_le(&mut self, num: i16);
-	fn put_u16_le(&mut self, num: u16);
-	fn put_u32_le(&mut self, num: u32);
-}
-
-impl BufMut for &mut [u8] {
-	fn put_i16_le(&mut self, num: i16) {
-		let bytes = num.to_le_bytes();
-		self[0] = bytes[0];
-		self[1] = bytes[1];
-	}
-
-	fn put_u16_le(&mut self, num: u16) {
-		let bytes = num.to_le_bytes();
-		self[0] = bytes[0];
-		self[1] = bytes[1];
-	}
-
-	fn put_u32_le(&mut self, num: u32) {
-		let bytes = num.to_le_bytes();
-		self[0] = bytes[0];
-		self[1] = bytes[1];
-		self[2] = bytes[2];
-		self[3] = bytes[3];
 	}
 }
 
@@ -175,7 +146,11 @@ impl ClientMessage {
 			&[0x40, 0x00] => Ok(XpressNet(xnet::DeviceMessage::from_bytes(&bytes[4..len])?)),
 			&[0x85, 0x00] => Ok(GetSystemState),
 			&[0x10, 0x00] => Ok(GetSerialNumber),
-			_ => Err(Error::ParseCommand),
+			&[0x1A, 0x00] => Ok(GetHardwareInfo),
+			_ => {
+				println!("Unknown: {:#04X?}", bytes);
+				Err(Error::ParseCommand)
+			}
 		}
 	}
 }
@@ -231,8 +206,8 @@ where
 		E: core::fmt::Debug,
 	{
 		let len = message.to_buf(&mut self.send_buf);
-		println!("sending: ({:?},{:?})", client, message);
-		println!("{:#04X?}", &self.send_buf[0..len]);
+		//println!("sending: ({:?},{:?})", client, message);
+		//println!("{:#04X?}", &self.send_buf[0..len]);
 		server
 			.send_to(&mut self.socket, client, &self.send_buf[0..len])
 			.map_err(|e| e.map(|_| Error::Send))
@@ -247,8 +222,8 @@ where
 			.receive(&mut self.socket, &mut self.recv_buf)
 			.map_err(|e| e.map(|_| Error::Receive))?;
 		let msg = ClientMessage::from_bytes(&self.recv_buf[0..num])?;
-		println!("received: ({:?},{:?})", addr, msg);
-		println!("{:#04X?}", &self.recv_buf[0..num]);
+		//println!("received: ({:?},{:?})", addr, msg);
+		//println!("{:#04X?}", &self.recv_buf[0..num]);
 		Ok((addr, msg))
 	}
 }
@@ -273,24 +248,40 @@ fn main() {
 			match msg {
 				GetSystemState => {
 					let state = SystemState {
-						main_current: 0,
-						prog_current: 0,
-						filtered_main_current: 0,
-						temperature: 20,
-						supply_voltage: 18,
-						vcc_voltage: 5,
-						central_state: CentralState::empty(),
+						main_current: 10,
+						prog_current: 20,
+						filtered_main_current: 30,
+						temperature: 40,
+						supply_voltage: 2000,
+						vcc_voltage: 2000,
+						central_state: CentralState::SHORT_CIRCUIT,
 						central_state_ex: CentralStateEx::empty(),
 					};
 					block!(server.send(&STACK, addr, &state)).unwrap();
 				}
 				GetSerialNumber => {
-					let sn = SerialNumber(42);
+					let sn = SerialNumber(58625);
 					block!(server.send(&STACK, addr, &sn)).unwrap();
+				}
+				GetHardwareInfo => {
+					let msg = HardwareInfo(
+						HardwareType::Z21New,
+						FirmwareVersion {
+							major: 33,
+							minor: 01,
+						},
+					);
+					block!(server.send(&STACK, addr, &msg)).unwrap();
+				}
+				ClientMessage::XpressNet(xnet::DeviceMessage::GetVersion) => {
+					let msg = CentralMessage::XpressNet(xnet::CentralMessage::Version(30, 0x12));
+					block!(server.send(&STACK, addr, &msg)).unwrap();
 				}
 				ClientMessage::XpressNet(xnet::DeviceMessage::GetState) => {
 					let state = CentralState::empty();
 					let msg = CentralMessage::XpressNet(xnet::CentralMessage::State(state));
+					block!(server.send(&STACK, addr, &msg)).unwrap();
+					let msg = CentralMessage::XpressNet(xnet::CentralMessage::TrackPowerOn);
 					block!(server.send(&STACK, addr, &msg)).unwrap();
 				}
 				_ => {}
