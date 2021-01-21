@@ -112,6 +112,14 @@ impl CentralMessage {
 				(&mut buf[2..6]).put_u32_le(*num);
 				6
 			}
+			XpressNet(xmsg) => {
+				buf[2] = 0x40;
+				buf[3] = 0x00;
+				let xnum = xmsg.to_buf(&mut buf[4..]);
+				let size = 4 + xnum;
+				buf[0..2].copy_from_slice(&(size as u16).to_le_bytes());
+				size
+			}
 			_ => unimplemented!(),
 		}
 	}
@@ -158,7 +166,6 @@ enum ClientMessage {
 impl ClientMessage {
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
 		use ClientMessage::*;
-		println!("{:#04X?}", bytes);
 		if bytes.len() < 4 {
 			return Err(Error::ParseCommand);
 		}
@@ -223,8 +230,9 @@ where
 		U: UdpServer<Error = E, UdpSocket = S>,
 		E: core::fmt::Debug,
 	{
-		let len = message.to_buf(&mut self.send_buf[2..]);
-		(&mut self.send_buf[0..2]).put_u16_le(len as u16);
+		let len = message.to_buf(&mut self.send_buf);
+		println!("sending: ({:?},{:?})", client, message);
+		println!("{:#04X?}", &self.send_buf[0..len]);
 		server
 			.send_to(&mut self.socket, client, &self.send_buf[0..len])
 			.map_err(|e| e.map(|_| Error::Send))
@@ -239,6 +247,8 @@ where
 			.receive(&mut self.socket, &mut self.recv_buf)
 			.map_err(|e| e.map(|_| Error::Receive))?;
 		let msg = ClientMessage::from_bytes(&self.recv_buf[0..num])?;
+		println!("received: ({:?},{:?})", addr, msg);
+		println!("{:#04X?}", &self.recv_buf[0..num]);
 		Ok((addr, msg))
 	}
 }
@@ -257,7 +267,6 @@ fn main() {
 	let mut server = Server::new(sock);
 	loop {
 		let recv = block!(server.receive(&STACK));
-		println!("received: {:?}", recv);
 		if let Ok((addr, msg)) = recv {
 			use CentralMessage::*;
 			use ClientMessage::*;
@@ -282,7 +291,7 @@ fn main() {
 				ClientMessage::XpressNet(xnet::DeviceMessage::GetState) => {
 					let state = CentralState::empty();
 					let msg = CentralMessage::XpressNet(xnet::CentralMessage::State(state));
-					//block!(server.send(&STACK, addr, &msg)).unwrap();
+					block!(server.send(&STACK, addr, &msg)).unwrap();
 				}
 				_ => {}
 			}
