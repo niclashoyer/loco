@@ -155,10 +155,10 @@ mod tests {
 		let bits = bytes * 8;
 		// add pin states for data line
 		let mut data_states = vec![];
-		for i in 0..bytes {
+		for byte in word.iter() {
 			for j in 0..8 {
 				// open drain output: high / low is inversed
-				if (word[i] >> j) & 0x01 == 1 {
+				if (byte >> j) & 0x01 == 1 {
 					data_states.push(Transaction::set(State::Low));
 				} else {
 					data_states.push(Transaction::set(State::High));
