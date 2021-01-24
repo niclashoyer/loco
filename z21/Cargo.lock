@@ -99,11 +99,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "loco-dcc"
+version = "0.1.0"
+dependencies = [
+ "loco-core",
+ "num-traits",
+]
+
+[[package]]
 name = "loco-xpressnet"
 version = "0.1.0"
 dependencies = [
  "bitflags",
  "loco-core",
+ "loco-dcc",
 ]
 
 [[package]]

@@ -43,7 +43,7 @@ bitflags! {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum HardwareType {
 	Z21Old,
 	Z21New,
@@ -53,13 +53,13 @@ pub enum HardwareType {
 	Custom(u32),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FirmwareVersion {
 	major: u8,
 	minor: u8,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CentralMessage {
 	HardwareInfo(HardwareType, FirmwareVersion),
 	SerialNumber(u32),
@@ -125,7 +125,7 @@ impl CentralMessage {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ClientMessage {
 	GetHardwareInfo,
 	GetSerialNumber,
@@ -244,6 +244,7 @@ fn main() {
 	loop {
 		let recv = block!(server.receive(&STACK));
 		if let Ok((addr, msg)) = recv {
+			println!("received: {:?}", (addr, msg.clone()));
 			use CentralMessage::*;
 			use ClientMessage::*;
 			match msg {
