@@ -23,13 +23,13 @@ impl Bits<u8> for CentralState {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Accessory {
 	address: u8,
 	data: u8,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SearchResult {
 	Loco(u16),
 	DoubleHeading(u16),
@@ -38,7 +38,7 @@ pub enum SearchResult {
 	None,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CentralError {
 	ConsistError,
 	ConsistOccupied,
@@ -50,7 +50,7 @@ pub enum CentralError {
 	StackOverflow,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CentralMessage<S: Bits<u8>> {
 	TrackPowerOn,
 	TrackPowerOff,
@@ -136,7 +136,7 @@ impl<S: Bits<u8>> CentralMessage<S> {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RefreshMode {
 	F0ToF4 = 0x0,
 	F0ToF8 = 0x1,
@@ -145,7 +145,7 @@ pub enum RefreshMode {
 	F0ToF28 = 0xF,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DeviceMessage {
 	TrackPowerOn,
 	TrackPowerOff,
@@ -215,8 +215,20 @@ pub enum DeviceMessage {
 
 impl DeviceMessage {
 	pub fn from_bytes(bytes: &[u8]) -> Result<DeviceMessage, Error> {
+		let check_xor = |len: usize, result: DeviceMessage| {
+			let x = bytes[0..len - 1].iter().fold(0, |acc, x| acc ^ x);
+			if x != bytes[len] {
+				Err(Error::ParseError)
+			} else {
+				Ok(result)
+			}
+		};
 		use DeviceMessage::*;
 		match bytes {
+			[0x21, 0x81, 0xA0, ..] => Ok(TrackPowerOn),
+			[0x21, 0x80, 0xA1, ..] => Ok(TrackPowerOff),
+			[0x80, 0x80, ..] => Ok(EmergencyStop),
+			[0x92, h, l, _, ..] => check_xor(4, LocoEmergencyStop(u16::from_le_bytes([*h, *l]))),
 			[0x21, 0x21, 0x00, ..] => Ok(GetVersion),
 			[0x21, 0x24, 0x05, ..] => Ok(GetState),
 			_ => {
