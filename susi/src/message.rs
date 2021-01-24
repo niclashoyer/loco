@@ -1,10 +1,30 @@
 use num_traits::{FromPrimitive, ToPrimitive};
 
-use loco_core::{
-	analog::AnalogNumber,
-	drive::Direction,
-	functions::{FunctionGroupData, FunctionGroupNumber},
-};
+use loco_core::{analog::AnalogNumber, drive::Direction, functions::FunctionGroupNumber};
+
+use loco_dcc::FunctionGroupByte;
+
+pub trait Byte<T> {
+	fn from_byte(byte: u8) -> T;
+	fn to_byte(&self) -> u8;
+}
+
+impl Byte<Direction> for Direction {
+	fn from_byte(byte: u8) -> Self {
+		if byte & (1 << 7) != 0 {
+			Self::Forward
+		} else {
+			Self::Backward
+		}
+	}
+
+	fn to_byte(&self) -> u8 {
+		match self {
+			Direction::Forward => 0x80,
+			Direction::Backward => 0x00,
+		}
+	}
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Msg {
@@ -16,7 +36,7 @@ pub enum Msg {
 	ControlSpeed(Direction, u8),
 	LocomotiveLoad(u8),
 	Analog(AnalogNumber, u8),
-	FunctionGroup(FunctionGroupNumber, FunctionGroupData),
+	FunctionGroup(FunctionGroupNumber, FunctionGroupByte),
 	BinaryState(u8, bool),
 	CVByteCheck {
 		addr: u8,
@@ -79,8 +99,8 @@ impl Msg {
 			[33, 0x01, _] => Msg::TriggerPulse,
 			[34, speed, _] => Msg::SpeedDiff(speed as i8),
 			[35, power, _] => Msg::MotorPower(power as i8),
-			[36, data, _] => Msg::LocomotiveSpeed(Direction::from_u8(data), data & MASK7),
-			[37, data, _] => Msg::ControlSpeed(Direction::from_u8(data), data & MASK7),
+			[36, data, _] => Msg::LocomotiveSpeed(Direction::from_byte(data), data & MASK7),
+			[37, data, _] => Msg::ControlSpeed(Direction::from_byte(data), data & MASK7),
 			[38, load, _] => Msg::LocomotiveLoad(load & MASK7),
 			[40..=47, value, _] => {
 				Msg::Analog(AnalogNumber::from_u8(bytes[0] - 40).unwrap(), value)
@@ -126,8 +146,8 @@ impl Msg {
 			Msg::TriggerPulse => [33, 0x01, 0x00],
 			Msg::SpeedDiff(diff) => [34, *diff as u8, 0x00],
 			Msg::MotorPower(power) => [35, *power as u8, 0x00],
-			Msg::LocomotiveSpeed(dir, speed) => [36, dir.to_u8() | (speed & MASK7), 0x00],
-			Msg::ControlSpeed(dir, speed) => [37, dir.to_u8() | (speed & MASK7), 0x00],
+			Msg::LocomotiveSpeed(dir, speed) => [36, dir.to_byte() | (speed & MASK7), 0x00],
+			Msg::ControlSpeed(dir, speed) => [37, dir.to_byte() | (speed & MASK7), 0x00],
 			Msg::LocomotiveLoad(load) => [38, load & MASK7, 0x00],
 			Msg::Analog(num, value) => [40 + num.to_u8().unwrap(), *value, 0x00],
 			Msg::FunctionGroup(num, data) => {
