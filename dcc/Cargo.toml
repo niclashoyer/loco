@@ -1,0 +1,15 @@
+[package]
+name = "loco-dcc"
+version = "0.1.0"
+authors = ["Niclas Hoyer <info@niclashoyer.de>"]
+edition = "2018"
+
+[patch.crates-io]
+loco-core = { path = "../core" }
+
+[dependencies]
+loco-core = "0.1"
+
+[dependencies.num-traits]
+version = "0.2"
+default-features = false
