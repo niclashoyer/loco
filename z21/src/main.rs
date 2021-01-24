@@ -1,5 +1,6 @@
 use bitflags::bitflags;
 use embedded_nal::{UdpClient, UdpServer};
+use loco_core::Bits;
 use loco_xpressnet as xnet;
 
 bitflags! {
@@ -20,7 +21,7 @@ bitflags! {
 	}
 }
 
-impl xnet::Bits<u8> for CentralState {
+impl Bits<u8> for CentralState {
 	fn bits(&self) -> u8 {
 		self.bits
 	}
@@ -43,7 +44,7 @@ bitflags! {
 }
 
 #[derive(Debug)]
-enum HardwareType {
+pub enum HardwareType {
 	Z21Old,
 	Z21New,
 	SmartRail,
@@ -53,13 +54,13 @@ enum HardwareType {
 }
 
 #[derive(Debug)]
-struct FirmwareVersion {
+pub struct FirmwareVersion {
 	major: u8,
 	minor: u8,
 }
 
 #[derive(Debug)]
-enum CentralMessage {
+pub enum CentralMessage {
 	HardwareInfo(HardwareType, FirmwareVersion),
 	SerialNumber(u32),
 	SystemState {
@@ -125,7 +126,7 @@ impl CentralMessage {
 }
 
 #[derive(Debug)]
-enum ClientMessage {
+pub enum ClientMessage {
 	GetHardwareInfo,
 	GetSerialNumber,
 	GetSystemState,
@@ -143,10 +144,10 @@ impl ClientMessage {
 		let len = u16::from_le_bytes([bytes[0], bytes[1]]) as usize;
 		let header = &bytes[2..4];
 		match header {
-			&[0x40, 0x00] => Ok(XpressNet(xnet::DeviceMessage::from_bytes(&bytes[4..len])?)),
-			&[0x85, 0x00] => Ok(GetSystemState),
-			&[0x10, 0x00] => Ok(GetSerialNumber),
-			&[0x1A, 0x00] => Ok(GetHardwareInfo),
+			[0x40, 0x00] => Ok(XpressNet(xnet::DeviceMessage::from_bytes(&bytes[4..len])?)),
+			[0x85, 0x00] => Ok(GetSystemState),
+			[0x10, 0x00] => Ok(GetSerialNumber),
+			[0x1A, 0x00] => Ok(GetHardwareInfo),
 			_ => {
 				println!("Unknown: {:#04X?}", bytes);
 				Err(Error::ParseCommand)
@@ -156,7 +157,7 @@ impl ClientMessage {
 }
 
 #[derive(Debug)]
-enum Error {
+pub enum Error {
 	Receive,
 	Send,
 	Bind,
@@ -268,7 +269,7 @@ fn main() {
 						HardwareType::Z21New,
 						FirmwareVersion {
 							major: 33,
-							minor: 01,
+							minor: 1,
 						},
 					);
 					block!(server.send(&STACK, addr, &msg)).unwrap();
