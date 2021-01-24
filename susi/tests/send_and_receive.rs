@@ -1,12 +1,14 @@
 mod time;
-mod wire;
 use embedded_time::duration::*;
 use time::*;
 
-use susi::message::{Direction, Msg};
+use embedded_hal_sync_pins::wire::*;
 
-type SusiSender = susi::sender::Sender<OpenDrainPin, PushPullPin, SimTimer>;
-type SusiReceiver = susi::receiver::Receiver<OpenDrainPin, InputOnlyPin, SimTimer>;
+use loco_core::drive::Direction;
+use loco_susi::message::Msg;
+
+type SusiSender = loco_susi::sender::Sender<OpenDrainPin, PushPullPin, SimTimer>;
+type SusiReceiver = loco_susi::receiver::Receiver<OpenDrainPin, InputOnlyPin, SimTimer>;
 
 enum Error {}
 
@@ -32,9 +34,9 @@ where
 	let sender_timer = clock.get_timer();
 	let receiver_timer = clock.get_timer();
 
-	let mut sender = susi::sender::Sender::new(sender_pin_data, sender_pin_clk, sender_timer);
+	let mut sender = loco_susi::sender::Sender::new(sender_pin_data, sender_pin_clk, sender_timer);
 	let mut receiver =
-		susi::receiver::Receiver::new(receiver_pin_data, receiver_pin_clk, receiver_timer);
+		loco_susi::receiver::Receiver::new(receiver_pin_data, receiver_pin_clk, receiver_timer);
 
 	let mut recv = vec![];
 	let mut sender_done = false;

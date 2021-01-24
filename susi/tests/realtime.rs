@@ -2,13 +2,13 @@ use linux_embedded_hal as hal;
 use std::thread;
 use thread_priority::*;
 
-mod wire;
-use wire::*;
+use embedded_hal_sync_pins::wire::*;
 
 use drogue_embedded_timer::embedded_countdown;
 use embedded_hal::timer::CountDown;
 use hal::SysTimer;
-use susi::message::{Direction, Msg};
+use loco_core::drive::Direction;
+use loco_susi::message::Msg;
 
 embedded_countdown!(
 	MsToStdCountDown,
@@ -40,9 +40,9 @@ fn set_realtime_priority(prio: u32) {
 	});
 }
 
-type SusiSender = susi::sender::Sender<OpenDrainPin, PushPullPin, UsToStdCountDown<SysTimer>>;
+type SusiSender = loco_susi::sender::Sender<OpenDrainPin, PushPullPin, UsToStdCountDown<SysTimer>>;
 type SusiReceiver =
-	susi::receiver::Receiver<OpenDrainPin, InputOnlyPin, MsToStdCountDown<SysTimer>>;
+	loco_susi::receiver::Receiver<OpenDrainPin, InputOnlyPin, MsToStdCountDown<SysTimer>>;
 
 fn send_and_receive<FS: 'static, FR: 'static>(send: FS, receive: FR) -> Vec<Msg>
 where
@@ -65,7 +65,7 @@ where
 		set_realtime_priority(80);
 		let timer = hal::SysTimer::new();
 		let timer = UsToStdCountDown::from(timer);
-		let sender = susi::sender::Sender::new(sender_pin_data, sender_pin_clk, timer);
+		let sender = loco_susi::sender::Sender::new(sender_pin_data, sender_pin_clk, timer);
 		sleep(Duration::from_millis(200));
 		send(sender)
 	});
@@ -73,7 +73,8 @@ where
 		set_realtime_priority(90);
 		let timer = hal::SysTimer::new();
 		let timer = MsToStdCountDown::from(timer);
-		let receiver = susi::receiver::Receiver::new(receiver_pin_data, receiver_pin_clk, timer);
+		let receiver =
+			loco_susi::receiver::Receiver::new(receiver_pin_data, receiver_pin_clk, timer);
 		receive(receiver)
 	});
 	let rec = receiver.join().unwrap();

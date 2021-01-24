@@ -1,5 +1,3 @@
-pub use crate::wire::*;
-
 use std::convert::Infallible;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;

@@ -1,5 +1,5 @@
 [package]
-name = "susi"
+name = "loco-susi"
 version = "0.1.0"
 authors = ["Niclas Hoyer <niclas@verbugt.de>"]
 edition = "2018"
@@ -12,8 +12,10 @@ std = []
 [patch.crates-io]
 embedded-hal-mock = { git = "https://github.com/niclashoyer/embedded-hal-mock", branch = "hal-1.0.0" }
 drogue-embedded-timer = { git = "https://github.com/niclashoyer/drogue-embedded-timer", branch = "hal-1.0.0" }
+loco-core = { path = "../core" }
 
 [dependencies]
+loco-core = "0.1"
 embedded-hal = "1.0.0-alpha.4"
 embedded-time = "0.10"
 nb = "1.0"
@@ -25,6 +27,7 @@ default-features = false
 
 [dev-dependencies]
 embedded-hal-mock = "0.8"
+embedded-hal-sync-pins = "0.1"
 linux-embedded-hal = "0.4.0-alpha.0"
 drogue-embedded-timer = "0.2"
 thread-priority = "0.2"

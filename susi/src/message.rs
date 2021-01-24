@@ -1,172 +1,10 @@
-use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 
-#[derive(Clone, Debug, PartialEq, FromPrimitive, ToPrimitive)]
-pub enum Function {
-	F0 = 0,
-	F1,
-	F2,
-	F3,
-	F4,
-	F5,
-	F6,
-	F7,
-	F8,
-	F9,
-	F10,
-	F11,
-	F12,
-	F13,
-	F14,
-	F15,
-	F16,
-	F17,
-	F18,
-	F19,
-	F20,
-	F21,
-	F22,
-	F23,
-	F24,
-	F25,
-	F26,
-	F27,
-	F28,
-	F29,
-	F30,
-	F31,
-	F32,
-	F33,
-	F34,
-	F35,
-	F36,
-	F37,
-	F38,
-	F39,
-	F40,
-	F41,
-	F42,
-	F43,
-	F44,
-	F45,
-	F46,
-	F47,
-	F48,
-	F49,
-	F50,
-	F51,
-	F52,
-	F53,
-	F54,
-	F55,
-	F56,
-	F57,
-	F58,
-	F59,
-	F60,
-	F61,
-	F62,
-	F63,
-	F64,
-	F65,
-	F66,
-	F67,
-	F68,
-}
-
-#[derive(Clone, Debug, PartialEq, FromPrimitive, ToPrimitive)]
-pub enum FunctionGroupNumber {
-	G1 = 1,
-	G2,
-	G3,
-	G4,
-	G5,
-	G6,
-	G7,
-	G8,
-	G9,
-}
-
-#[derive(Clone, Debug, PartialEq, Copy)]
-pub struct FunctionGroupData {
-	data: u8,
-}
-
-#[derive(Clone, Debug, PartialEq, FromPrimitive, ToPrimitive)]
-pub enum AnalogNumber {
-	A0 = 0,
-	A1,
-	A2,
-	A3,
-	A4,
-	A5,
-	A6,
-	A7,
-}
-
-impl FunctionGroupData {
-	fn function_position(f: Function) -> u8 {
-		let n = f.to_u8().unwrap();
-		match n {
-			0 => 4,
-			1..=4 => n - 1,
-			_ => (n - 5) % 8,
-		}
-	}
-
-	pub fn get(&self, f: Function) -> bool {
-		let p = Self::function_position(f);
-		(self.data >> p) & 0x01 == 0x01
-	}
-
-	pub fn set(&mut self, f: Function, value: bool) {
-		let p = Self::function_position(f);
-		if value {
-			self.data |= 1 << p;
-		} else {
-			self.data &= !(1 << p);
-		}
-	}
-
-	pub fn clear(&mut self) {
-		self.data = 0x00;
-	}
-}
-
-impl From<u8> for FunctionGroupData {
-	fn from(data: u8) -> Self {
-		Self { data }
-	}
-}
-
-impl From<FunctionGroupData> for u8 {
-	fn from(data: FunctionGroupData) -> u8 {
-		data.data
-	}
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Direction {
-	Forward,
-	Backward,
-}
-
-impl Direction {
-	fn from_u8(val: u8) -> Self {
-		if val & (1 << 7) != 0 {
-			Self::Forward
-		} else {
-			Self::Backward
-		}
-	}
-
-	fn to_u8(&self) -> u8 {
-		match self {
-			Direction::Forward => 0x80,
-			Direction::Backward => 0x00,
-		}
-	}
-}
+use loco_core::{
+	analog::AnalogNumber,
+	drive::Direction,
+	functions::{FunctionGroupData, FunctionGroupNumber},
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Msg {
@@ -367,7 +205,7 @@ mod tests {
 	// test function group decoding and manipulation
 	#[test]
 	fn function_group_data() {
-		use super::Function::*;
+		use loco_core::functions::Function::*;
 		let data: u8 = 0b1010_1010;
 		let mut group: FunctionGroupData = data.into();
 

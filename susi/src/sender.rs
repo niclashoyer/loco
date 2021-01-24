@@ -144,8 +144,9 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{Sender, SenderResult};
-	use crate::message::{Direction, Msg};
+	use crate::message::Msg;
 	use crate::tests_mock::*;
+	use loco_core::drive::Direction;
 
 	// convert a vector of bytes to mocked pins that can be used
 	// to test a sender
