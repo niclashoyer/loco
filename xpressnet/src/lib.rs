@@ -4,7 +4,7 @@ use loco_core::{
 	functions::FunctionGroupNumber,
 	mov, xor, Bits,
 };
-use loco_dcc::FunctionGroupByte;
+use loco_dcc::{DirectionByte, SpeedByte, FunctionGroupByte};
 
 bitflags! {
 	pub struct CentralState: u8 {
@@ -217,7 +217,7 @@ impl DeviceMessage {
 	pub fn from_bytes(bytes: &[u8]) -> Result<DeviceMessage, Error> {
 		let check_xor = |len: usize, result: DeviceMessage| {
 			let x = bytes[0..len - 1].iter().fold(0, |acc, x| acc ^ x);
-			if x != bytes[len] {
+			if x != bytes[len - 1] {
 				Err(Error::ParseError)
 			} else {
 				Ok(result)
@@ -231,6 +231,30 @@ impl DeviceMessage {
 			[0x92, h, l, _, ..] => check_xor(4, LocoEmergencyStop(u16::from_le_bytes([*h, *l]))),
 			[0x21, 0x21, 0x00, ..] => Ok(GetVersion),
 			[0x21, 0x24, 0x05, ..] => Ok(GetState),
+			[0xE4, 0x10, h, l, rv, _, ..] => check_xor(
+				6,
+				LocoDrive(
+					u16::from_le_bytes([*h, *l]),
+					Direction::from_byte(*rv),
+					Speed::from_byte_14_steps(*rv),
+				),
+			),
+			[0xE4, 0x12, h, l, rv, _, ..] => check_xor(
+				6,
+				LocoDrive(
+					u16::from_le_bytes([*h, *l]),
+					Direction::from_byte(*rv),
+					Speed::from_byte_28_steps(*rv),
+				),
+			),
+			[0xE4, 0x13, h, l, rv, _, ..] => check_xor(
+				6,
+				LocoDrive(
+					u16::from_le_bytes([*h, *l]),
+					Direction::from_byte(*rv),
+					Speed::from_byte_128_steps(*rv),
+				),
+			),
 			_ => {
 				println!("X: {:#04X?}", bytes);
 				Err(Error::ParseError)
