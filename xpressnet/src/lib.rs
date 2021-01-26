@@ -1,10 +1,11 @@
 use bitflags::bitflags;
+use dcc::FunctionGroupByte;
 use loco_core::{
 	drive::{Direction, Speed},
 	functions::FunctionGroupNumber,
 	mov, xor, Bits,
 };
-use loco_dcc::{DirectionByte, SpeedByte, FunctionGroupByte};
+use loco_dcc as dcc;
 
 bitflags! {
 	pub struct CentralState: u8 {
@@ -18,6 +19,7 @@ bitflags! {
 }
 
 impl Bits<u8> for CentralState {
+	#[inline]
 	fn bits(&self) -> u8 {
 		self.bits
 	}
@@ -112,6 +114,19 @@ pub enum CentralMessage<S: Bits<u8>> {
 	},
 	SearchResult(SearchResult),
 	Error(CentralError),
+	#[cfg(feature = "z21")]
+	Z21LocoInformation {
+		loco_address: u16,
+		is_free: bool,
+		direction: Direction,
+		speed: Speed,
+		f0: FunctionGroupByte,
+		f1: FunctionGroupByte,
+		f2: FunctionGroupByte,
+		f3: FunctionGroupByte,
+		double_heading: bool,
+		smart_search: bool,
+	},
 }
 
 #[derive(Debug)]
@@ -122,6 +137,11 @@ pub enum Error {
 impl<S: Bits<u8>> CentralMessage<S> {
 	pub fn to_buf(&self, buf: &mut [u8]) -> usize {
 		use CentralMessage::*;
+		let add_xor = |buf: &mut [u8], len: usize| -> usize {
+			let x = buf[0..len - 1].iter().fold(0, |acc, x| acc ^ x);
+			buf[len - 1] = x;
+			len
+		};
 		match self {
 			TrackPowerOn => mov!(buf[0..3] <= &xor!([0x61, 0x01])),
 			TrackPowerOff => mov!(buf[0..3] <= &xor!([0x61, 0x00])),
@@ -131,6 +151,37 @@ impl<S: Bits<u8>> CentralMessage<S> {
 			TransferError => mov!(buf[0..3] <= &xor!([0x61, 0x80])),
 			StationBusy => mov!(buf[0..3] <= &xor!([0x61, 0x81])),
 			UnknownCommand => mov!(buf[0..3] <= &xor!([0x61, 0x82])),
+			#[cfg(feature = "z21")]
+			Z21LocoInformation {
+				loco_address,
+				is_free,
+				direction,
+				speed,
+				f0,
+				f1,
+				f2,
+				f3,
+				double_heading,
+				smart_search,
+			} => {
+				buf[0] = 0xEF;
+				mov!(buf[1..=2] <= &loco_address.to_le_bytes());
+				let code = match speed {
+					Speed::Steps14(_) => 0,
+					Speed::Steps28(_) => 2,
+					Speed::Steps128(_) => 4,
+					_ => 4,
+				};
+				buf[3] = (*is_free as u8) << 3 | code;
+				buf[4] = dcc::direction::to_advanced_byte(&direction) | dcc::speed::to_byte(&speed);
+				buf[5] = (u8::from(*f0) & 0x3F)
+					| ((*smart_search as u8) << 5)
+					| ((*double_heading as u8) << 6);
+				buf[6] = u8::from(*f1);
+				buf[7] = u8::from(*f2);
+				buf[8] = u8::from(*f3);
+				add_xor(buf, 10)
+			}
 			_ => unimplemented!(),
 		}
 	}
@@ -235,24 +286,24 @@ impl DeviceMessage {
 				6,
 				LocoDrive(
 					u16::from_le_bytes([*h, *l]),
-					Direction::from_byte(*rv),
-					Speed::from_byte_14_steps(*rv),
+					dcc::direction::from_advanced_byte(*rv),
+					dcc::speed::from_byte_14_steps(*rv),
 				),
 			),
 			[0xE4, 0x12, h, l, rv, _, ..] => check_xor(
 				6,
 				LocoDrive(
 					u16::from_le_bytes([*h, *l]),
-					Direction::from_byte(*rv),
-					Speed::from_byte_28_steps(*rv),
+					dcc::direction::from_advanced_byte(*rv),
+					dcc::speed::from_byte_28_steps(*rv),
 				),
 			),
 			[0xE4, 0x13, h, l, rv, _, ..] => check_xor(
 				6,
 				LocoDrive(
 					u16::from_le_bytes([*h, *l]),
-					Direction::from_byte(*rv),
-					Speed::from_byte_128_steps(*rv),
+					dcc::direction::from_advanced_byte(*rv),
+					dcc::speed::from_byte_128_steps(*rv),
 				),
 			),
 			_ => {
