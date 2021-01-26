@@ -22,6 +22,7 @@ bitflags! {
 }
 
 impl Bits<u8> for CentralState {
+	#[inline]
 	fn bits(&self) -> u8 {
 		self.bits
 	}
@@ -284,6 +285,25 @@ fn main() {
 					let msg = CentralMessage::XpressNet(xnet::CentralMessage::State(state));
 					block!(server.send(&STACK, addr, &msg)).unwrap();
 					let msg = CentralMessage::XpressNet(xnet::CentralMessage::TrackPowerOn);
+					block!(server.send(&STACK, addr, &msg)).unwrap();
+				}
+				ClientMessage::XpressNet(xnet::DeviceMessage::LocoDrive(
+					loco_address,
+					direction,
+					speed,
+				)) => {
+					let msg = CentralMessage::XpressNet(xnet::CentralMessage::Z21LocoInformation {
+						loco_address,
+						is_free: true,
+						direction,
+						speed,
+						f0: (0x00).into(),
+						f1: (0x00).into(),
+						f2: (0x00).into(),
+						f3: (0x00).into(),
+						double_heading: false,
+						smart_search: false,
+					});
 					block!(server.send(&STACK, addr, &msg)).unwrap();
 				}
 				_ => {}

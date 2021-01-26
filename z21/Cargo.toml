@@ -16,7 +16,7 @@ std-embedded-nal = { path = "../../std-embedded-nal" }
 embedded-nal = "0.2"
 bitflags = "1.2"
 loco-core = "0.1"
-loco-xpressnet = "0.1"
+loco-xpressnet = { version = "0.1", features = ["z21"] }
 nb = "1.0"
 #std-embedded-nal = { git = "https://gitlab.com/chrysn/std-embedded-nal", branch = "embedded-nal-v0.2.0" }
 std-embedded-nal = "*"
