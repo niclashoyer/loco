@@ -1,41 +1,46 @@
-use loco_core::drive::Direction;
+pub mod direction {
+	use loco_core::drive::Direction;
 
-pub trait DirectionByte {
-	fn from_byte(byte: u8) -> Direction;
-	fn to_byte(&self) -> u8;
-}
-
-impl DirectionByte for Direction {
 	#[inline]
-	fn from_byte(val: u8) -> Self {
-		if val & (1 << 5) != 0 {
-			Self::Forward
+	pub fn from_baseline_byte(byte: u8) -> Direction {
+		if byte & (1 << 5) != 0 {
+			Direction::Forward
 		} else {
-			Self::Backward
+			Direction::Backward
 		}
 	}
 
 	#[inline]
-	fn to_byte(&self) -> u8 {
-		match self {
+	pub fn to_baseline_byte(dir: &Direction) -> u8 {
+		match dir {
 			Direction::Forward => 0x20,
+			Direction::Backward => 0x00,
+		}
+	}
+
+	#[inline]
+	pub fn from_advanced_byte(byte: u8) -> Direction {
+		if byte & (1 << 7) != 0 {
+			Direction::Forward
+		} else {
+			Direction::Backward
+		}
+	}
+
+	#[inline]
+	pub fn to_advanced_byte(dir: &Direction) -> u8 {
+		match dir {
+			Direction::Forward => 0x80,
 			Direction::Backward => 0x00,
 		}
 	}
 }
 
-use loco_core::drive::Speed;
+pub mod speed {
+	use loco_core::drive::Speed;
 
-pub trait SpeedByte {
-	fn from_byte_14_steps(byte: u8) -> Speed;
-	fn from_byte_28_steps(byte: u8) -> Speed;
-	fn from_byte_128_steps(byte: u8) -> Speed;
-	fn to_byte(&self) -> u8;
-}
-
-impl SpeedByte for Speed {
 	#[inline]
-	fn from_byte_14_steps(byte: u8) -> Speed {
+	pub fn from_byte_14_steps(byte: u8) -> Speed {
 		use Speed::*;
 		match byte & 0x0F {
 			0x0 => Stop,
@@ -45,9 +50,9 @@ impl SpeedByte for Speed {
 	}
 
 	#[inline]
-	fn from_byte_28_steps(byte: u8) -> Speed {
+	pub fn from_byte_28_steps(byte: u8) -> Speed {
 		use Speed::*;
-		match byte & 0x0F {
+		match byte & 0x1F {
 			0x00 => Stop,
 			0x01 => EmergencyStop,
 			s => Steps28(((s << 1) | ((byte >> 4) & 0x01)) * 4),
@@ -55,9 +60,9 @@ impl SpeedByte for Speed {
 	}
 
 	#[inline]
-	fn from_byte_128_steps(byte: u8) -> Speed {
+	pub fn from_byte_128_steps(byte: u8) -> Speed {
 		use Speed::*;
-		match byte & 0x0F {
+		match byte & 0x7F {
 			0x0 => Stop,
 			0x01 => EmergencyStop,
 			_ => Steps128((byte & 0x7F) * 2),
@@ -65,9 +70,9 @@ impl SpeedByte for Speed {
 	}
 
 	#[inline]
-	fn to_byte(&self) -> u8 {
+	pub fn to_byte(speed: &Speed) -> u8 {
 		use Speed::*;
-		match self {
+		match speed {
 			Stop => 0x00,
 			EmergencyStop => 0x01,
 			Steps14(s) => (s / 4) & 0x0F,
