@@ -16,6 +16,7 @@ drogue-embedded-timer = { git = "https://github.com/niclashoyer/drogue-embedded-
 # unreleased
 loco-core = { path = "../core" }
 loco-dcc = { path = "../dcc" }
+embedded-hal-mock-clock = { path = "../embedded-hal-mock-clock" }
 
 [dependencies]
 loco-core = "0.1"
@@ -32,6 +33,7 @@ default-features = false
 [dev-dependencies]
 embedded-hal-mock = "0.8"
 embedded-hal-sync-pins = "0.1"
+embedded-hal-mock-clock = "0.1"
 linux-embedded-hal = "0.4.0-alpha.0"
 drogue-embedded-timer = "0.2"
 thread-priority = "0.2"

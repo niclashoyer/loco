@@ -1,6 +1,5 @@
-mod time;
+use embedded_hal_mock_clock::*;
 use embedded_time::duration::*;
-use time::*;
 
 use embedded_hal_sync_pins::wire::*;
 
@@ -12,11 +11,7 @@ type SusiReader = loco_susi::reader::Reader<OpenDrainPin, InputOnlyPin, SimTimer
 
 enum Error {}
 
-fn write_and_read<FS: 'static, FR: 'static>(
-	mut write: FS,
-	mut read: FR,
-	timeout: u32,
-) -> Vec<Msg>
+fn write_and_read<FS: 'static, FR: 'static>(mut write: FS, mut read: FR, timeout: u32) -> Vec<Msg>
 where
 	FS: FnMut(&mut SusiWriter, &SimClock) -> nb::Result<(), Error>,
 	FR: FnMut(&mut SusiReader, &SimClock) -> nb::Result<Vec<Msg>, Error>,
@@ -35,8 +30,7 @@ where
 	let reader_timer = clock.get_timer();
 
 	let mut writer = loco_susi::writer::Writer::new(writer_pin_data, writer_pin_clk, writer_timer);
-	let mut reader =
-		loco_susi::reader::Reader::new(reader_pin_data, reader_pin_clk, reader_timer);
+	let mut reader = loco_susi::reader::Reader::new(reader_pin_data, reader_pin_clk, reader_timer);
 
 	let mut recv = vec![];
 	let mut writer_done = false;
