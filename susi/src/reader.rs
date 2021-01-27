@@ -6,8 +6,8 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal::timer::CountDown;
 use embedded_time::duration::*;
 
-/// A receiver for the SUSI protocol
-pub struct Receiver<DATA, CLK, TIM> {
+/// A reader for the SUSI protocol
+pub struct Reader<DATA, CLK, TIM> {
 	pin_data: DATA,
 	pin_clk: CLK,
 	timer: TIM,
@@ -25,14 +25,14 @@ enum State {
 	WaitAfterByte,
 }
 
-impl<DATA, CLK, TIM> Receiver<DATA, CLK, TIM>
+impl<DATA, CLK, TIM> Reader<DATA, CLK, TIM>
 where
 	DATA: InputPin + OutputPin,
 	CLK: InputPin,
 	TIM: CountDown,
 	TIM::Time: From<Milliseconds<u32>>,
 {
-	/// Create a receiver using data and clock lines
+	/// Create a reader using data and clock lines
 	///
 	/// * `pin_data` - An InputPin + OutputPin that must be configured
 	///                as open drain output. If the pin is set to low,
@@ -147,12 +147,12 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::Receiver;
+	use super::Reader;
 	use crate::message::Msg;
 	use crate::tests_mock::*;
 
 	// convert a vector of bytes to mocked pins that can be used
-	// to test a receiver
+	// to test a reader
 	fn get_pin_states(word: Vec<u8>, acks: usize) -> (Mock, Mock, MockTimer, usize) {
 		let bytes = word.len();
 		let bits = bytes * 8;
@@ -190,9 +190,9 @@ mod tests {
 	#[test]
 	fn single_noop() {
 		let (data, clk, timer, bits) = get_pin_states(vec![0x00, 0x00], 0);
-		let mut receiver = Receiver::new(data, clk, timer);
+		let mut reader = Reader::new(data, clk, timer);
 		for i in 0..bits * 2 {
-			let res = receiver.read();
+			let res = reader.read();
 			if i < (bits * 2) - 1 {
 				assert_eq!(res, Err(nb::Error::WouldBlock));
 			} else {
@@ -205,9 +205,9 @@ mod tests {
 	#[test]
 	fn single_diff() {
 		let (data, clk, timer, bits) = get_pin_states(vec![0x22, 0xf8], 0);
-		let mut receiver = Receiver::new(data, clk, timer);
+		let mut reader = Reader::new(data, clk, timer);
 		for i in 0..bits * 2 {
-			let res = receiver.read();
+			let res = reader.read();
 			if i < (bits * 2) - 1 {
 				assert_eq!(res, Err(nb::Error::WouldBlock));
 			} else {
@@ -220,9 +220,9 @@ mod tests {
 	#[test]
 	fn three_messages() {
 		let (data, clk, timer, _bits) = get_pin_states(vec![0x22, 0xf8, 0x00, 0x00, 0x23, 0x08], 0);
-		let mut receiver = Receiver::new(data, clk, timer);
+		let mut reader = Reader::new(data, clk, timer);
 		for i in 0..32 {
-			let res = receiver.read();
+			let res = reader.read();
 			if i < 31 {
 				assert_eq!(res, Err(nb::Error::WouldBlock));
 			} else {
@@ -230,7 +230,7 @@ mod tests {
 			}
 		}
 		for i in 0..32 {
-			let res = receiver.read();
+			let res = reader.read();
 			if i < 31 {
 				assert_eq!(res, Err(nb::Error::WouldBlock));
 			} else {
@@ -238,7 +238,7 @@ mod tests {
 			}
 		}
 		for i in 0..32 {
-			let res = receiver.read();
+			let res = reader.read();
 			if i < 31 {
 				assert_eq!(res, Err(nb::Error::WouldBlock));
 			} else {
@@ -250,9 +250,9 @@ mod tests {
 	#[test]
 	fn cv_set() {
 		let (data, clk, timer, bits) = get_pin_states(vec![0x7F, 0x80, 0xAA], 1);
-		let mut receiver = Receiver::new(data, clk, timer);
+		let mut reader = Reader::new(data, clk, timer);
 		for i in 0..bits * 2 {
-			let res = receiver.read();
+			let res = reader.read();
 			if i < (bits * 2) - 1 {
 				assert_eq!(res, Err(nb::Error::WouldBlock));
 			} else {
@@ -265,6 +265,6 @@ mod tests {
 				);
 			}
 		}
-		let _ = receiver.ack();
+		let _ = reader.ack();
 	}
 }

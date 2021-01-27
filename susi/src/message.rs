@@ -2,7 +2,7 @@ use num_traits::{FromPrimitive, ToPrimitive};
 
 use loco_core::{analog::AnalogNumber, drive::Direction, functions::FunctionGroupNumber};
 
-use loco_dcc::FunctionGroupByte;
+use loco_dcc::function::FunctionGroupByte;
 
 pub trait Byte<T> {
 	fn from_byte(byte: u8) -> T;
@@ -227,7 +227,7 @@ mod tests {
 	fn function_group_data() {
 		use loco_core::functions::Function::*;
 		let data: u8 = 0b1010_1010;
-		let mut group: FunctionGroupData = data.into();
+		let mut group: FunctionGroupByte = data.into();
 
 		assert_eq!(group.get(F0), false); // F0 should be at index 4
 		assert_eq!(group.get(F4), true);

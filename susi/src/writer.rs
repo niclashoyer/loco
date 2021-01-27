@@ -1,4 +1,4 @@
-//! A sender implementation for the SUSI protocol
+//! A writer implementation for the SUSI protocol
 
 use crate::message::Msg;
 use crate::Error;
@@ -8,8 +8,8 @@ use embedded_time::duration::*;
 
 const HALF_CLK_PERIOD: u32 = 200;
 
-/// A sender for the SUSI protocol
-pub struct Sender<DATA, CLK, TIM> {
+/// A writer for the SUSI protocol
+pub struct Writer<DATA, CLK, TIM> {
 	pin_data: DATA,
 	pin_clk: CLK,
 	timer: TIM,
@@ -21,7 +21,7 @@ pub struct Sender<DATA, CLK, TIM> {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum SenderResult {
+pub enum WriterResult {
 	None,
 	Ack,
 	Nack,
@@ -36,14 +36,14 @@ enum State {
 	WaitingForReset,
 }
 
-impl<DATA, CLK, TIM> Sender<DATA, CLK, TIM>
+impl<DATA, CLK, TIM> Writer<DATA, CLK, TIM>
 where
 	DATA: InputPin + OutputPin,
 	CLK: OutputPin,
 	TIM: CountDown,
 	TIM::Time: From<Microseconds<u32>>,
 {
-	/// Create a sender using data and clock lines
+	/// Create a writer using data and clock lines
 	///
 	/// * `pin_data` - An InputPin + OutputPin that must be configured
 	///                as open drain output. If the pin is set to low,
@@ -74,7 +74,7 @@ where
 		self.state = State::Idle;
 	}
 
-	pub fn write(&mut self, msg: &Msg) -> nb::Result<SenderResult, Error> {
+	pub fn write(&mut self, msg: &Msg) -> nb::Result<WriterResult, Error> {
 		match self.state {
 			State::Idle => {
 				self.buf = msg.to_bytes();
@@ -93,7 +93,7 @@ where
 							self.state = State::WaitingForAck;
 						} else {
 							self.reset();
-							return Ok(SenderResult::None);
+							return Ok(WriterResult::None);
 						}
 					}
 				}
@@ -143,13 +143,13 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::{Sender, SenderResult};
+	use super::{Writer, WriterResult};
 	use crate::message::Msg;
 	use crate::tests_mock::*;
 	use loco_core::drive::Direction;
 
 	// convert a vector of bytes to mocked pins that can be used
-	// to test a sender
+	// to test a writer
 	fn get_pin_states(msg: &Msg) -> (Mock, Mock, MockTimer, usize) {
 		let word = msg.to_bytes();
 		let bytes = msg.len() as usize;
@@ -190,9 +190,9 @@ mod tests {
 	fn single_noop() {
 		let msg = Msg::Noop;
 		let (data, clk, timer, _bits) = get_pin_states(&msg);
-		let mut sender = Sender::new(data, clk, timer);
-		let res = nb::block!(sender.write(&msg));
-		assert_eq!(res, Ok(SenderResult::None));
+		let mut writer = Writer::new(data, clk, timer);
+		let res = nb::block!(writer.write(&msg));
+		assert_eq!(res, Ok(WriterResult::None));
 	}
 
 	// test writing a single speed message
@@ -200,8 +200,8 @@ mod tests {
 	fn single_speed() {
 		let msg = Msg::LocomotiveSpeed(Direction::Forward, 120);
 		let (data, clk, timer, _bits) = get_pin_states(&msg);
-		let mut sender = Sender::new(data, clk, timer);
-		let res = nb::block!(sender.write(&msg));
-		assert_eq!(res, Ok(SenderResult::None));
+		let mut writer = Writer::new(data, clk, timer);
+		let res = nb::block!(writer.write(&msg));
+		assert_eq!(res, Ok(WriterResult::None));
 	}
 }

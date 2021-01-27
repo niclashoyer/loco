@@ -40,14 +40,14 @@ fn set_realtime_priority(prio: u32) {
 	});
 }
 
-type SusiSender = loco_susi::sender::Sender<OpenDrainPin, PushPullPin, UsToStdCountDown<SysTimer>>;
-type SusiReceiver =
-	loco_susi::receiver::Receiver<OpenDrainPin, InputOnlyPin, MsToStdCountDown<SysTimer>>;
+type SusiWriter = loco_susi::writer::Writer<OpenDrainPin, PushPullPin, UsToStdCountDown<SysTimer>>;
+type SusiReader =
+	loco_susi::reader::Reader<OpenDrainPin, InputOnlyPin, MsToStdCountDown<SysTimer>>;
 
-fn send_and_receive<FS: 'static, FR: 'static>(send: FS, receive: FR) -> Vec<Msg>
+fn write_and_read<FS: 'static, FR: 'static>(write: FS, read: FR) -> Vec<Msg>
 where
-	FS: FnOnce(SusiSender) -> () + Send,
-	FR: FnOnce(SusiReceiver) -> Vec<Msg> + Send,
+	FS: FnOnce(SusiWriter) -> () + Send,
+	FR: FnOnce(SusiReader) -> Vec<Msg> + Send,
 {
 	use std::thread::sleep;
 	use std::time::Duration;
@@ -55,46 +55,46 @@ where
 	let wire_clk = Wire::new();
 	let wire_data = Wire::new_with_pull(WireState::High);
 
-	let sender_pin_clk = wire_clk.as_push_pull_pin();
-	let sender_pin_data = wire_data.as_open_drain_pin();
+	let writer_pin_clk = wire_clk.as_push_pull_pin();
+	let writer_pin_data = wire_data.as_open_drain_pin();
 
-	let receiver_pin_clk = wire_clk.as_input_pin();
-	let receiver_pin_data = wire_data.as_open_drain_pin();
+	let reader_pin_clk = wire_clk.as_input_pin();
+	let reader_pin_data = wire_data.as_open_drain_pin();
 
-	let sender = thread::spawn(move || {
+	let writer = thread::spawn(move || {
 		set_realtime_priority(80);
 		let timer = hal::SysTimer::new();
 		let timer = UsToStdCountDown::from(timer);
-		let sender = loco_susi::sender::Sender::new(sender_pin_data, sender_pin_clk, timer);
+		let writer = loco_susi::writer::Writer::new(writer_pin_data, writer_pin_clk, timer);
 		sleep(Duration::from_millis(200));
-		send(sender)
+		write(writer)
 	});
-	let receiver = thread::spawn(move || {
+	let reader = thread::spawn(move || {
 		set_realtime_priority(90);
 		let timer = hal::SysTimer::new();
 		let timer = MsToStdCountDown::from(timer);
-		let receiver =
-			loco_susi::receiver::Receiver::new(receiver_pin_data, receiver_pin_clk, timer);
-		receive(receiver)
+		let reader =
+			loco_susi::reader::Reader::new(reader_pin_data, reader_pin_clk, timer);
+		read(reader)
 	});
-	let rec = receiver.join().unwrap();
-	sender.join().unwrap();
+	let rec = reader.join().unwrap();
+	writer.join().unwrap();
 	rec
 }
 
-fn send_and_receive_messages(msgs: Vec<Msg>) {
+fn write_and_read_messages(msgs: Vec<Msg>) {
 	use std::thread::sleep;
 	use std::time::Duration;
 
-	let mut send_msgs = msgs.clone();
+	let mut write_msgs = msgs.clone();
 	let num = msgs.len();
 
-	let sender = move |mut sender: SusiSender| {
-		send_msgs.reverse();
+	let writer = move |mut writer: SusiWriter| {
+		write_msgs.reverse();
 		sleep(Duration::from_millis(200));
-		while let Some(msg) = send_msgs.pop() {
+		while let Some(msg) = write_msgs.pop() {
 			loop {
-				let res = sender.write(&msg);
+				let res = writer.write(&msg);
 				if let Ok(_) = res {
 					break;
 				} else if res != Err(nb::Error::WouldBlock) {
@@ -105,21 +105,21 @@ fn send_and_receive_messages(msgs: Vec<Msg>) {
 				let slept = slept.elapsed().as_micros();
 				if slept > 200 {
 					eprintln!(
-						"WARNING: sender slept {} µs, more than 200 µs will cause problems",
+						"WARNING: writer slept {} µs, more than 200 µs will cause problems",
 						slept
 					);
 				}
 			}
 		}
 	};
-	let receiver = move |mut receiver: SusiReceiver| {
+	let reader = move |mut reader: SusiReader| {
 		let start = std::time::Instant::now();
 		let mut recv = vec![];
 		loop {
 			if start.elapsed().as_millis() > 2000 {
-				panic!("receiver timed out - buf: {:?}", recv);
+				panic!("reader timed out - buf: {:?}", recv);
 			}
-			let res = receiver.read();
+			let res = reader.read();
 			if let Ok(msg) = res {
 				recv.push(msg);
 				if recv.len() == num {
@@ -133,14 +133,14 @@ fn send_and_receive_messages(msgs: Vec<Msg>) {
 			let slept = slept.elapsed().as_micros();
 			if slept > 200 {
 				eprintln!(
-					"WARNING: receiver slept {} µs, more than 200 µs will cause problems",
+					"WARNING: reader slept {} µs, more than 200 µs will cause problems",
 					slept
 				);
 			}
 		}
 	};
 
-	let recv = send_and_receive(sender, receiver);
+	let recv = write_and_read(writer, reader);
 	assert_eq!(recv, msgs);
 }
 
@@ -149,13 +149,13 @@ use serial_test::serial;
 #[test]
 #[serial]
 fn single_message() {
-	send_and_receive_messages(vec![Msg::LocomotiveSpeed(Direction::Forward, 120)]);
+	write_and_read_messages(vec![Msg::LocomotiveSpeed(Direction::Forward, 120)]);
 }
 
 #[test]
 #[serial]
 fn two_messages() {
-	send_and_receive_messages(vec![
+	write_and_read_messages(vec![
 		Msg::LocomotiveSpeed(Direction::Forward, 120),
 		Msg::LocomotiveSpeed(Direction::Forward, 120),
 	]);
@@ -164,7 +164,7 @@ fn two_messages() {
 #[test]
 #[serial]
 fn three_messages() {
-	send_and_receive_messages(vec![
+	write_and_read_messages(vec![
 		Msg::LocomotiveSpeed(Direction::Forward, 120),
 		Msg::LocomotiveSpeed(Direction::Forward, 120),
 		Msg::LocomotiveSpeed(Direction::Forward, 120),
