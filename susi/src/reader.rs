@@ -80,7 +80,6 @@ where
 		// if we are not in idle state, check if the timer
 		// finished to sync again
 		if self.state == State::WaitAfterByte && self.timer.try_wait().is_ok() {
-			println!("reset");
 			self.reset();
 		}
 		// get current clock signal
@@ -130,7 +129,7 @@ where
 
 	pub fn ack(&mut self) -> nb::Result<(), Error> {
 		if self.state == State::WaitAcknowledge {
-			self.timer.try_wait().map_err(|_| Error::IOError)?;
+			self.timer.try_wait().map_err(|_| Error::TimerError)?;
 			self.pin_data.try_set_low().map_err(|_| Error::IOError)?;
 			self.reset();
 			Ok(())
