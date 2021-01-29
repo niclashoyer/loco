@@ -1,11 +1,11 @@
 use bitflags::bitflags;
-use dcc::FunctionGroupByte;
 use loco_core::{
+	address::Address,
 	drive::{Direction, Speed},
 	functions::FunctionGroupNumber,
 	mov, xor, Bits,
 };
-use loco_dcc as dcc;
+use loco_dcc::{direction::DccDirection, function::FunctionGroupByte, speed::DccSpeed};
 
 bitflags! {
 	pub struct CentralState: u8 {
@@ -173,7 +173,7 @@ impl<S: Bits<u8>> CentralMessage<S> {
 					_ => 4,
 				};
 				buf[3] = (*is_free as u8) << 3 | code;
-				buf[4] = dcc::direction::to_advanced_byte(&direction) | dcc::speed::to_byte(&speed);
+				buf[4] = direction.to_advanced_byte() | speed.to_byte();
 				buf[5] = (u8::from(*f0) & 0x3F)
 					| ((*smart_search as u8) << 5)
 					| ((*double_heading as u8) << 6);
@@ -286,24 +286,24 @@ impl DeviceMessage {
 				6,
 				LocoDrive(
 					u16::from_le_bytes([*h, *l]),
-					dcc::direction::from_advanced_byte(*rv),
-					dcc::speed::from_byte_14_steps(*rv),
+					Direction::from_advanced_byte(*rv),
+					Speed::from_byte_14_steps(*rv),
 				),
 			),
 			[0xE4, 0x12, h, l, rv, _, ..] => check_xor(
 				6,
 				LocoDrive(
 					u16::from_le_bytes([*h, *l]),
-					dcc::direction::from_advanced_byte(*rv),
-					dcc::speed::from_byte_28_steps(*rv),
+					Direction::from_advanced_byte(*rv),
+					Speed::from_byte_28_steps(*rv),
 				),
 			),
 			[0xE4, 0x13, h, l, rv, _, ..] => check_xor(
 				6,
 				LocoDrive(
 					u16::from_le_bytes([*h, *l]),
-					dcc::direction::from_advanced_byte(*rv),
-					dcc::speed::from_byte_128_steps(*rv),
+					Direction::from_advanced_byte(*rv),
+					Speed::from_byte_128_steps(*rv),
 				),
 			),
 			_ => {
