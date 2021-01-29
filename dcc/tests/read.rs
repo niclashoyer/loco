@@ -1,7 +1,10 @@
 use embedded_hal_mock_clock::*;
 use embedded_hal_vcd::reader::VcdReader;
 use embedded_time::duration::*;
-use loco_dcc::{message::Message, reader::Reader};
+use loco_dcc::{
+	message::Message,
+	reader::{PinDecoder, Reader},
+};
 
 use std::convert::TryInto;
 use std::fs::File;
@@ -17,7 +20,8 @@ fn read() -> Result<(), std::io::Error> {
 	let mut vcd_reader = VcdReader::new(f).unwrap();
 	let in_pin = vcd_reader.get_pin(&["libsigrok", "data"]).unwrap();
 	// construct dcc reader using pin and timer
-	let mut dcc_reader = Reader::new(in_pin, reader_timer);
+	let decoder = PinDecoder::new(in_pin, reader_timer);
+	let mut dcc_reader = Reader::new(decoder);
 
 	let timeout = 500_u32.milliseconds();
 	let mut next_event = 0_u32.nanoseconds();

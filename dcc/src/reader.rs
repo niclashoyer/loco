@@ -5,52 +5,59 @@ use embedded_time::duration::*;
 use crate::message::Message;
 use crate::Error;
 
-const BUF_SIZE: usize = 16;
+const BUF_SIZE: usize = 8;
 
 #[derive(Debug, PartialEq)]
 enum State {
 	Idle,
+	Byte,
+	StartBit,
 }
 
-#[derive(Debug, PartialEq)]
-enum Bit {
+#[derive(Debug, PartialEq, Clone)]
+pub enum Bit {
 	Zero,
 	One,
-	None,
 }
 
-/// A reader for the DCC protocol
-pub struct Reader<DCC, TIM> {
+impl Copy for Bit {}
+
+impl From<Bit> for bool {
+	#[inline]
+	fn from(bit: Bit) -> bool {
+		bit == Bit::One
+	}
+}
+
+impl From<Bit> for u8 {
+	#[inline]
+	fn from(bit: Bit) -> u8 {
+		use Bit::*;
+		match bit {
+			One => 0x01,
+			Zero => 0x00,
+		}
+	}
+}
+
+pub trait Decoder {
+	fn decode(&mut self) -> nb::Result<Bit, Error>;
+}
+
+#[derive(Debug)]
+pub struct PinDecoder<DCC, TIM> {
 	pin_dcc: DCC,
 	timer: TIM,
-	current_byte: u8,
-	buf: [u8; BUF_SIZE],
+	last_half_bit: Option<Bit>,
 	last_pin_state: bool,
-	last_half_bit: Bit,
-	bits_read: u8,
-	state: State,
 }
 
-impl<DCC, TIM> Reader<DCC, TIM>
+impl<DCC, TIM> PinDecoder<DCC, TIM>
 where
 	DCC: InputPin,
 	TIM: CountDown,
 	TIM::Time: From<Microseconds<u32>>,
 {
-	pub fn new(pin_dcc: DCC, timer: TIM) -> Self {
-		let last_pin_state = pin_dcc.try_is_high().unwrap_or(false);
-		Self {
-			pin_dcc,
-			timer,
-			current_byte: 0,
-			buf: [0; BUF_SIZE],
-			last_pin_state,
-			bits_read: 0,
-			state: State::Idle,
-			last_half_bit: Bit::None,
-		}
-	}
-
 	fn start_timeout(&mut self) -> Result<(), Error> {
 		self.timer
 			.try_start(73.microseconds())
@@ -58,27 +65,136 @@ where
 		Ok(())
 	}
 
-	pub fn read(&mut self) -> nb::Result<Message, Error> {
+	pub fn new(pin_dcc: DCC, timer: TIM) -> Self {
+		let last_pin_state = pin_dcc.try_is_high().unwrap_or(false);
+		Self {
+			pin_dcc,
+			timer,
+			last_half_bit: None,
+			last_pin_state,
+		}
+	}
+}
+
+impl<DCC, TIM> Decoder for PinDecoder<DCC, TIM>
+where
+	DCC: InputPin,
+	TIM: CountDown,
+	TIM::Time: From<Microseconds<u32>>,
+{
+	fn decode(&mut self) -> nb::Result<Bit, Error> {
+		let mut ret = None;
 		let pin_state = self.pin_dcc.try_is_high().unwrap_or(false);
 		if pin_state != self.last_pin_state {
 			if self.timer.try_wait().is_ok() {
-				if self.last_half_bit == Bit::Zero {
-					println!("zero");
-					self.last_half_bit = Bit::None;
+				if self.last_half_bit == Some(Bit::Zero) {
+					ret = Some(Bit::Zero);
+					self.last_half_bit = None;
 				} else {
-					self.last_half_bit = Bit::Zero;
+					self.last_half_bit = Some(Bit::Zero);
 				}
 			} else {
-				if self.last_half_bit == Bit::One {
-					println!("one");
-					self.last_half_bit = Bit::None;
+				if self.last_half_bit == Some(Bit::One) {
+					ret = Some(Bit::One);
+					self.last_half_bit = None;
 				} else {
-					self.last_half_bit = Bit::One;
+					self.last_half_bit = Some(Bit::One);
 				}
 			}
 
 			self.start_timeout()?;
 			self.last_pin_state = pin_state;
+		}
+		if let Some(bit) = ret {
+			Ok(bit)
+		} else {
+			Err(nb::Error::WouldBlock)
+		}
+	}
+}
+
+/// A reader for the DCC protocol
+pub struct Reader<D> {
+	decoder: D,
+	one_bits: u8,
+	current_byte: u8,
+	buf: [u8; BUF_SIZE],
+	bits_read: u8,
+	state: State,
+}
+
+impl<D> Reader<D>
+where
+	D: Decoder,
+{
+	pub fn new(decoder: D) -> Self {
+		Self {
+			decoder,
+			current_byte: 0,
+			one_bits: 0,
+			buf: [0; BUF_SIZE],
+			bits_read: 0,
+			state: State::Idle,
+		}
+	}
+
+	fn reset(&mut self) {
+		use State::*;
+		self.state = Idle;
+		self.bits_read = 0;
+		self.current_byte = 0;
+		self.buf = [0; BUF_SIZE];
+	}
+
+	fn start(&mut self) {
+		use State::*;
+		self.state = Byte;
+		self.bits_read = 0;
+		self.one_bits = 0;
+		self.current_byte = 0;
+		self.buf = [0; BUF_SIZE];
+	}
+
+	pub fn read(&mut self) -> nb::Result<Message, Error> {
+		use Bit::*;
+		use State::*;
+		let bit = self.decoder.decode()?;
+		match bit {
+			One => {
+				self.one_bits += 1;
+			}
+			Zero => {
+				if self.one_bits > 9 {
+					self.start();
+					return Err(nb::Error::WouldBlock);
+				}
+				self.one_bits = 0;
+			}
+		}
+		match self.state {
+			Byte => {
+				let i = self.current_byte as usize;
+				let data: u8 = bit.into();
+				self.buf[i] <<= 1;
+				self.buf[i] |= data;
+				self.bits_read += 1;
+				if self.bits_read == 8 {
+					self.bits_read = 0;
+					self.current_byte += 1;
+					self.state = StartBit;
+				}
+			}
+			StartBit => {
+				if bit == Zero {
+					self.state = Byte;
+				} else {
+					let len = self.current_byte as usize;
+					let msg = Message::from_bytes(&self.buf[0..len]);
+					self.reset();
+					return Ok(msg);
+				}
+			}
+			_ => {}
 		}
 		Err(nb::Error::WouldBlock)
 	}
