@@ -3,6 +3,7 @@ use loco_core::{
 	address::Address,
 	drive::{Direction, Speed},
 };
+use log::trace;
 
 #[derive(Debug)]
 pub enum Message {
@@ -14,7 +15,7 @@ impl Message {
 	pub fn from_bytes(bytes: &[u8]) -> Self {
 		use Message::*;
 		let addr = Address::from_bytes(bytes);
-		println!("{:?} {:#04X?}", addr, bytes);
+		trace!("{:?} {:#04X?}", addr, bytes);
 		let bytes = &bytes[addr.len()..];
 		let cmd = (bytes[0] & 0b1110_0000) >> 5;
 		match cmd {

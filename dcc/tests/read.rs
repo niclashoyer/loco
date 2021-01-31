@@ -6,9 +6,11 @@ use loco_dcc::{
 	reader::{PinDecoder, Reader},
 };
 
+use log::debug;
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::BufReader;
+use test_env_log::test;
 
 #[test]
 fn read() -> Result<(), std::io::Error> {
@@ -31,10 +33,14 @@ fn read() -> Result<(), std::io::Error> {
 			panic!("simulation timed out");
 		}
 		if clock.elapsed() >= next_event {
-			next_event = vcd_reader.next().unwrap().try_into().unwrap();
+			if let Some(next) = vcd_reader.next() {
+				next_event = next.try_into().unwrap();
+			} else {
+				break;
+			}
 		}
 		if let Ok(msg) = dcc_reader.read() {
-			println!("read: {:?}", msg);
+			debug!("read: {:?}", msg);
 		}
 		clock.tick(500_u64.nanoseconds());
 	}
