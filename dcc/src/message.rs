@@ -26,4 +26,8 @@ impl Message {
 			_ => Unknown,
 		}
 	}
+
+	pub fn to_buf(&self, buf: &mut [u8]) -> usize {
+		unimplemented!();
+	}
 }
