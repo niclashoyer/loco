@@ -5,6 +5,8 @@ use embedded_time::duration::*;
 use crate::message::Message;
 use crate::Error;
 
+use log::trace;
+
 const BUF_SIZE: usize = 8;
 const PREAMBLE_SIZE: u8 = 14;
 // half bit lengths in microseconds
@@ -35,7 +37,20 @@ where
 	TIM: CountDown,
 	TIM::Time: From<Microseconds<u32>>,
 {
+	pub fn new(pin_dcc: DCC, timer: TIM) -> Self {
+		Self {
+			pin_dcc,
+			timer,
+			state: State::Idle,
+			buf: [0; BUF_SIZE],
+			bytes_to_write: 0,
+			bits_written: 0,
+			bit_written: false,
+		}
+	}
+
 	fn start_half_zero(&mut self) -> Result<(), Error> {
+		trace!("start half zero");
 		self.pin_dcc.try_toggle().map_err(|_| Error::IOError)?;
 		self.timer
 			.try_start(ZERO_HALF_BIT.microseconds())
@@ -43,6 +58,7 @@ where
 	}
 
 	fn start_half_one(&mut self) -> Result<(), Error> {
+		trace!("start half one");
 		self.pin_dcc.try_toggle().map_err(|_| Error::IOError)?;
 		self.timer
 			.try_start(ONE_HALF_BIT.microseconds())
@@ -52,10 +68,10 @@ where
 	fn start_next_bit(&mut self) -> Result<(), Error> {
 		let num = self.bits_written / 8;
 		let bit = (self.buf[num] >> (self.bits_written % 8)) == 0x01;
+		trace!("half-bit {}", if bit { "one" } else { "zero" });
 		if self.bit_written {
 			self.bits_written += 1;
 		}
-		self.bit_written = !self.bit_written;
 		if bit {
 			self.start_half_one()
 		} else {
@@ -70,11 +86,14 @@ where
 				.timer
 				.try_wait()
 				.map_err(|e| e.map(|_| Error::TimerError))?;
+			self.bit_written = !self.bit_written;
 		}
 		match self.state {
 			Idle => {
 				self.bytes_to_write = msg.to_buf(&mut self.buf);
-				self.state = Preamble(PREAMBLE_SIZE);
+				self.bits_written = 0;
+				self.bit_written = false;
+				self.state = Preamble(PREAMBLE_SIZE * 2);
 				self.start_half_one()?;
 			}
 			Preamble(left) => {
