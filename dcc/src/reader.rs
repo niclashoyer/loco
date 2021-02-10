@@ -1,6 +1,7 @@
 use embedded_hal::digital::InputPin;
 use embedded_hal::timer::CountDown;
 use embedded_time::duration::*;
+use log::{debug, trace};
 
 use crate::message::Message;
 use crate::Error;
@@ -87,21 +88,10 @@ where
 		let pin_state = self.pin_dcc.try_is_high().unwrap_or(false);
 		if pin_state != self.last_pin_state {
 			if self.timer.try_wait().is_ok() {
-				if self.last_half_bit == Some(Bit::Zero) {
-					ret = Some(Bit::Zero);
-					self.last_half_bit = None;
-				} else {
-					self.last_half_bit = Some(Bit::Zero);
-				}
+				ret = self.handle_half_bit(Bit::Zero);
 			} else {
-				if self.last_half_bit == Some(Bit::One) {
-					ret = Some(Bit::One);
-					self.last_half_bit = None;
-				} else {
-					self.last_half_bit = Some(Bit::One);
-				}
+				ret = self.handle_half_bit(Bit::One);
 			}
-
 			self.start_timeout()?;
 			self.last_pin_state = pin_state;
 		}
@@ -109,6 +99,29 @@ where
 			Ok(bit)
 		} else {
 			Err(nb::Error::WouldBlock)
+		}
+	}
+}
+
+impl<DCC, TIM> PinDecoder<DCC, TIM>
+where
+	DCC: InputPin,
+	TIM: CountDown,
+	TIM::Time: From<Microseconds<u32>>,
+{
+	#[inline]
+	fn handle_half_bit(&mut self, bit: Bit) -> Option<Bit> {
+		trace!(
+			"{:<20}{:<20}",
+			format!("edge detected"),
+			format!("{:?}/{:?}", self.last_half_bit, bit)
+		);
+		if self.last_half_bit == Some(bit) {
+			self.last_half_bit = None;
+			Some(bit)
+		} else {
+			self.last_half_bit = Some(bit);
+			None
 		}
 	}
 }
@@ -159,12 +172,18 @@ where
 		use Bit::*;
 		use State::*;
 		let bit = self.decoder.decode()?;
+		trace!(
+			"{:<20}{:<20}",
+			"bit read",
+			format!("{:?}/{:?}/{:?}", self.state, bit, self.bits_read)
+		);
 		match bit {
 			One => {
 				self.one_bits += 1;
 			}
 			Zero => {
 				if self.one_bits > 9 {
+					debug!("detected preamble + zero, start reading bits");
 					self.start();
 					return Err(nb::Error::WouldBlock);
 				}
@@ -179,6 +198,7 @@ where
 				self.buf[i] |= data;
 				self.bits_read += 1;
 				if self.bits_read == 8 {
+					debug!("read byte {:#04x}", self.buf[i]);
 					self.bits_read = 0;
 					self.current_byte += 1;
 					self.state = StartBit;
@@ -189,7 +209,8 @@ where
 					self.state = Byte;
 				} else {
 					let len = self.current_byte as usize;
-					let msg = Message::from_bytes(&self.buf[0..len]);
+					let msg = Message::from_bytes(&self.buf[..len]);
+					debug!("read bytes {:#04X?} as {:?}", &self.buf[..len], msg);
 					self.reset();
 					return Ok(msg);
 				}

@@ -12,7 +12,7 @@ impl DccSpeed for Speed {
 	fn from_byte_14_steps(byte: u8) -> Speed {
 		use Speed::*;
 		match byte & 0x0F {
-			0x0 => Stop,
+			0x00 => Stop,
 			0x01 => EmergencyStop,
 			s => Steps14(s * 8),
 		}
@@ -32,7 +32,7 @@ impl DccSpeed for Speed {
 	fn from_byte_128_steps(byte: u8) -> Speed {
 		use Speed::*;
 		match byte & 0x7F {
-			0x0 => Stop,
+			0x00 => Stop,
 			0x01 => EmergencyStop,
 			_ => Steps128((byte & 0x7F) * 2),
 		}

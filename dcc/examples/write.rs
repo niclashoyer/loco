@@ -5,7 +5,10 @@ use loco_core::{
 	address::Address,
 	drive::{Direction, Speed},
 };
-use loco_dcc::{message::Message, writer::Writer};
+use loco_dcc::{
+	message::Message,
+	writer::{PinEncoder, Writer},
+};
 
 use log::debug;
 use std::convert::TryInto;
@@ -23,8 +26,9 @@ fn main() -> Result<(), std::io::Error> {
 	let mut builder = VcdWriterBuilder::new(f).unwrap();
 	let out_pin = builder.add_push_pull_pin("dcc").unwrap();
 	let mut vcd_writer = builder.build().unwrap();
-	// construct dcc reader using pin and timer
-	let mut dcc_writer = Writer::new(out_pin, writer_timer);
+	// construct dcc writer using pin and timer
+	let encoder = PinEncoder::new(out_pin, writer_timer);
+	let mut dcc_writer = Writer::new(encoder);
 
 	let timeout = 500_u32.milliseconds();
 

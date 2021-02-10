@@ -5,7 +5,7 @@ use embedded_time::duration::*;
 use crate::message::Message;
 use crate::Error;
 
-use log::trace;
+use log::{debug, trace};
 
 const BUF_SIZE: usize = 8;
 const PREAMBLE_SIZE: u8 = 14;
@@ -13,25 +13,33 @@ const PREAMBLE_SIZE: u8 = 14;
 const ONE_HALF_BIT: u32 = 58;
 const ZERO_HALF_BIT: u32 = 100;
 
-#[derive(Debug, PartialEq)]
-enum State {
-	Idle,
-	Preamble(u8),
-	Zero,
-	Writing,
+pub trait Encoder {
+	fn write(&mut self, bit: &Bit) -> nb::Result<(), Error>;
 }
 
-pub struct Writer<DCC, TIM> {
+#[derive(Debug, Clone, PartialEq)]
+pub enum Bit {
+	One,
+	Zero,
+}
+
+impl Copy for Bit {}
+
+#[derive(Debug, PartialEq)]
+enum EncoderState {
+	Idle,
+	WritingFirstHalf,
+	WritingSecondHalf,
+}
+
+#[derive(Debug)]
+pub struct PinEncoder<DCC, TIM> {
 	pin_dcc: DCC,
 	timer: TIM,
-	state: State,
-	buf: [u8; BUF_SIZE],
-	bytes_to_write: usize,
-	bits_written: usize,
-	bit_written: bool,
+	state: EncoderState,
 }
 
-impl<DCC, TIM> Writer<DCC, TIM>
+impl<DCC, TIM> PinEncoder<DCC, TIM>
 where
 	DCC: ToggleableOutputPin,
 	TIM: CountDown,
@@ -41,96 +49,206 @@ where
 		Self {
 			pin_dcc,
 			timer,
+			state: EncoderState::Idle,
+		}
+	}
+
+	fn toggle_pin(&mut self) -> Result<(), Error> {
+		self.pin_dcc.try_toggle().map_err(|_| Error::IOError)
+	}
+
+	fn start_timer(&mut self, bit: &Bit) -> Result<(), Error> {
+		let d = match bit {
+			Bit::One => ONE_HALF_BIT,
+			Bit::Zero => ZERO_HALF_BIT,
+		};
+		self.timer
+			.try_start(d.microseconds())
+			.map_err(|_| Error::TimerError)
+	}
+
+	fn wait_timer(&mut self) -> nb::Result<(), Error> {
+		self.timer
+			.try_wait()
+			.map_err(|e| e.map(|_| Error::TimerError))
+	}
+}
+
+impl<DCC, TIM> Encoder for PinEncoder<DCC, TIM>
+where
+	DCC: ToggleableOutputPin,
+	TIM: CountDown,
+	TIM::Time: From<Microseconds<u32>>,
+{
+	#[inline]
+	fn write(&mut self, bit: &Bit) -> nb::Result<(), Error> {
+		use EncoderState::*;
+		if self.state != Idle {
+			self.wait_timer()?;
+		}
+		match self.state {
+			Idle => {
+				self.start_timer(bit)?;
+				self.state = WritingFirstHalf;
+			}
+			WritingFirstHalf => {
+				self.toggle_pin()?;
+				self.start_timer(bit)?;
+				self.state = WritingSecondHalf;
+			}
+			WritingSecondHalf => {
+				self.toggle_pin()?;
+				self.state = Idle;
+				return Ok(());
+			}
+		}
+		Err(nb::Error::WouldBlock)
+	}
+}
+
+#[derive(Debug, PartialEq)]
+enum State {
+	Idle,
+	Preamble(u8),
+	Zero,
+	Writing(Bit),
+	End,
+}
+
+pub struct Writer<E> {
+	encoder: E,
+	state: State,
+	buf: [u8; BUF_SIZE],
+	bytes_to_write: usize,
+	bits_written: usize,
+}
+
+impl<E> Writer<E>
+where
+	E: Encoder,
+{
+	#[inline]
+	pub fn new(encoder: E) -> Self {
+		Self {
+			encoder,
 			state: State::Idle,
 			buf: [0; BUF_SIZE],
 			bytes_to_write: 0,
 			bits_written: 0,
-			bit_written: false,
 		}
 	}
 
-	fn start_half_zero(&mut self) -> Result<(), Error> {
-		trace!("start half zero");
-		self.pin_dcc.try_toggle().map_err(|_| Error::IOError)?;
-		self.timer
-			.try_start(ZERO_HALF_BIT.microseconds())
-			.map_err(|_| Error::TimerError)
+	#[inline]
+	fn write_preamble(&mut self, left: u8) -> nb::Result<(), Error> {
+		use State::*;
+		if self.state != Preamble(left) {
+			self.state = Preamble(left);
+		}
+		self.encoder.write(&Bit::One)
 	}
 
-	fn start_half_one(&mut self) -> Result<(), Error> {
-		trace!("start half one");
-		self.pin_dcc.try_toggle().map_err(|_| Error::IOError)?;
-		self.timer
-			.try_start(ONE_HALF_BIT.microseconds())
-			.map_err(|_| Error::TimerError)
+	#[inline]
+	fn write_zero(&mut self) -> nb::Result<(), Error> {
+		use State::*;
+		if self.state != Zero {
+			self.state = Zero;
+		}
+		self.encoder.write(&Bit::Zero)
 	}
 
-	fn start_next_bit(&mut self) -> Result<(), Error> {
+	#[inline]
+	fn next_bit(&mut self) -> Bit {
 		let num = self.bits_written / 8;
-		let bit = (self.buf[num] >> (self.bits_written % 8)) == 0x01;
-		trace!("half-bit {}", if bit { "one" } else { "zero" });
-		if self.bit_written {
-			self.bits_written += 1;
-		}
-		if bit {
-			self.start_half_one()
+		if (self.buf[num] >> (7 - (self.bits_written % 8))) & 0x01 == 0x01 {
+			Bit::One
 		} else {
-			self.start_half_zero()
+			Bit::Zero
 		}
+	}
+
+	#[inline]
+	fn write_bit(&mut self, bit: &Bit) -> nb::Result<(), Error> {
+		use State::*;
+		if self.state != Writing(*bit) {
+			self.state = Writing(*bit);
+		}
+		self.state = Writing(*bit);
+		self.encoder.write(&bit)?;
+		self.bits_written += 1;
+		Ok(())
+	}
+
+	#[inline]
+	fn write_end(&mut self) -> nb::Result<(), Error> {
+		use State::*;
+		if self.state != End {
+			self.state = End;
+		}
+		self.encoder.write(&Bit::One)
 	}
 
 	pub fn write(&mut self, msg: &Message) -> nb::Result<(), Error> {
 		use State::*;
-		if self.state != Idle {
-			let _ = self
-				.timer
-				.try_wait()
-				.map_err(|e| e.map(|_| Error::TimerError))?;
-			self.bit_written = !self.bit_written;
-		}
+		trace!(
+			"{:<20}{:<20}{:<20}",
+			format!("{:?}", self.state),
+			"",
+			format!("{}/{}", self.bits_written, self.bytes_to_write * 8)
+		);
 		match self.state {
 			Idle => {
 				self.bytes_to_write = msg.to_buf(&mut self.buf);
+				debug!(
+					"writing {:?} as {:#04X?}",
+					msg,
+					&self.buf[..self.bytes_to_write]
+				);
 				self.bits_written = 0;
-				self.bit_written = false;
-				self.state = Preamble(PREAMBLE_SIZE * 2);
-				self.start_half_one()?;
+				debug!("starting preamble");
+				self.write_preamble(PREAMBLE_SIZE)
 			}
 			Preamble(left) => {
-				let mut left = left;
-				if self.bit_written {
-					self.bit_written = false;
-					left = left - 1;
-				}
+				self.write_preamble(left)?;
 				if left > 0 {
-					self.start_half_one()?;
-					self.state = Preamble(left);
+					self.write_preamble(left - 1)
 				} else {
-					self.state = Zero;
-					self.start_half_zero()?;
+					debug!("preamble done, writing zero");
+					self.write_zero()
 				}
 			}
 			Zero => {
-				if self.bit_written {
-					self.state = Writing;
-					self.start_next_bit()?;
+				self.write_zero()?;
+				debug!("zero done, starting next byte");
+				let bit = self.next_bit();
+				trace!("next bit: {:?}", bit);
+				self.write_bit(&bit)
+			}
+			Writing(bit) => {
+				self.write_bit(&bit)?;
+				if self.bits_written == self.bytes_to_write * 8 {
+					debug!(
+						"byte {:#04x} done, message written, writing one",
+						self.buf[(self.bits_written - 1) / 8]
+					);
+					self.write_end()
+				} else if self.bits_written % 8 == 0 {
+					debug!(
+						"byte {:#04x} done, writing zero",
+						self.buf[(self.bits_written - 1) / 8]
+					);
+					self.write_zero()
 				} else {
-					self.start_half_zero()?;
+					let bit = self.next_bit();
+					trace!("next bit: {:?}", bit);
+					self.write_bit(&bit)
 				}
 			}
-			Writing => {
-				if self.bits_written == self.bytes_to_write * 8 {
-					self.state = Idle;
-					return Ok(());
-				}
-				if self.bits_written % 8 == 0 {
-					self.state = Zero;
-					self.start_half_zero()?;
-				} else {
-					self.start_next_bit()?;
-				}
+			End => {
+				self.write_end()?;
+				debug!("finished");
+				self.state = Idle;
+				return Ok(());
 			}
 		}
-		Err(nb::Error::WouldBlock)
 	}
 }
