@@ -14,7 +14,7 @@ impl DccSpeed for Speed {
 		match byte & 0x0F {
 			0x00 => Stop,
 			0x01 => EmergencyStop,
-			s => Steps14(s * 8),
+			s => Steps14(s * 16),
 		}
 	}
 
@@ -24,7 +24,7 @@ impl DccSpeed for Speed {
 		match byte & 0x1F {
 			0x00 => Stop,
 			0x01 => EmergencyStop,
-			s => Steps28(((s << 1) | ((byte >> 4) & 0x01)) * 4),
+			s => Steps28((((s & 0x0F) << 1) | ((byte >> 4) & 0x01)) * 8),
 		}
 	}
 
@@ -44,9 +44,9 @@ impl DccSpeed for Speed {
 		match self {
 			Stop => 0x00,
 			EmergencyStop => 0x01,
-			Steps14(s) => (s / 4) & 0x0F,
-			Steps28(s) => (((s / 8) & 0x0F) << 1) | (((s / 4) & 0x01) << 4),
-			Steps128(s) => (s / 2) & 0x7F,
+			Steps14(s) => (s / 16) & 0x0E,
+			Steps28(s) => (((s / 8) & 0x30) >> 1) | (((s / 8) & 0x01) << 4) & 0xFE,
+			Steps128(s) => (s / 2) & 0x7E,
 		}
 	}
 }

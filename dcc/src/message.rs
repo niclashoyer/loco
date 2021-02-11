@@ -27,8 +27,8 @@ impl Message {
 			0b001 => match bytes[0] & 0b000_11111 {
 				0b11111 => Drive(
 					addr,
-					Direction::from_advanced_byte(bytes[0]),
-					Speed::from_byte_128_steps(bytes[0]),
+					Direction::from_advanced_byte(bytes[1]),
+					Speed::from_byte_128_steps(bytes[1]),
 				),
 				_ => Unknown(addr),
 			},

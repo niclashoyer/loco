@@ -116,7 +116,7 @@ fn write_and_read_messages(msgs: Vec<Message>) {
 #[test]
 fn single_message() {
 	write_and_read_messages(vec![
-		Message::Drive(Address { num: 23 }, Direction::Forward, Speed::Steps128(42)),
-		Message::Drive(Address { num: 2 }, Direction::Forward, Speed::Steps128(2)),
+		Message::Drive(Address { num: 23 }, Direction::Forward, Speed::Steps128(56)),
+		Message::Drive(Address { num: 2 }, Direction::Forward, Speed::Steps128(4)),
 	]);
 }

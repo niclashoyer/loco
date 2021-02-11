@@ -10,7 +10,7 @@ pub trait DccDirection {
 impl DccDirection for Direction {
 	#[inline]
 	fn from_baseline_byte(byte: u8) -> Direction {
-		if byte & (1 << 5) != 0 {
+		if byte & 0x20 == 0x20 {
 			Direction::Forward
 		} else {
 			Direction::Backward
@@ -27,7 +27,7 @@ impl DccDirection for Direction {
 
 	#[inline]
 	fn from_advanced_byte(byte: u8) -> Direction {
-		if byte & (1 << 7) != 0 {
+		if byte & 0x80 == 0x80 {
 			Direction::Forward
 		} else {
 			Direction::Backward
