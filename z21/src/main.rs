@@ -55,6 +55,7 @@ pub enum HardwareType {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // FIXME: major/minor is actually used
 pub struct FirmwareVersion {
 	major: u8,
 	minor: u8,
