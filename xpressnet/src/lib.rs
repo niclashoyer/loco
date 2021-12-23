@@ -1,10 +1,14 @@
 use bitflags::bitflags;
+#[cfg(feature = "z21")]
+use loco_core::functions::Function;
 use loco_core::{
 	drive::{Direction, Speed},
 	functions::FunctionGroupNumber,
 	mov, xor, Bits,
 };
 use loco_dcc::{direction::DccDirection, function::FunctionGroupByte, speed::DccSpeed};
+use log::debug;
+use num_traits::cast::FromPrimitive;
 
 bitflags! {
 	pub struct CentralState: u8 {
@@ -193,6 +197,34 @@ pub enum RefreshMode {
 	F0ToF28 = 0xF,
 }
 
+#[cfg(feature = "z21")]
+#[derive(Debug, Clone)]
+pub enum FunctionSwitch {
+	On,
+	Off,
+	Toggle,
+}
+
+#[cfg(feature = "z21")]
+impl FunctionSwitch {
+	pub fn from_byte(byte: u8) -> FunctionSwitch {
+		match byte & 0xC0 {
+			0x00 => Self::Off,
+			0x40 => Self::On,
+			0x80 => Self::Toggle,
+			_ => panic!("invalid byte"),
+		}
+	}
+
+	pub fn to_byte(&self) -> u8 {
+		match self {
+			Self::Off => 0x00,
+			Self::On => 0x40,
+			Self::Toggle => 0x80,
+		}
+	}
+}
+
 #[derive(Debug, Clone)]
 pub enum DeviceMessage {
 	TrackPowerOn,
@@ -217,6 +249,8 @@ pub enum DeviceMessage {
 	LocoDrive(u16, Direction, Speed),
 	SetFunctionGroup(FunctionGroupNumber, FunctionGroupByte),
 	SetFunctionToggled(FunctionGroupNumber, FunctionGroupByte),
+	#[cfg(feature = "z21")]
+	Z21SetFunction(u16, FunctionSwitch, Function),
 	SetRefreshMode(RefreshMode),
 	AddDoubleHeading(u16, u16),
 	RemoveDoubleHeading(u16),
@@ -303,8 +337,17 @@ impl DeviceMessage {
 					Speed::from_byte_128_steps(*rv),
 				),
 			),
+			#[cfg(feature = "z21")]
+			[0xE4, 0xF8, h, l, b, _, ..] => check_xor(
+				6,
+				Z21SetFunction(
+					u16::from_le_bytes([*h, *l]),
+					FunctionSwitch::from_byte(*b),
+					Function::from_u8(*b & 0x3F).unwrap(),
+				),
+			),
 			_ => {
-				println!("X: {:#04X?}", bytes);
+				debug!("unknown message: {:#04X?}", bytes);
 				Err(Error::ParseError)
 			}
 		}

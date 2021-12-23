@@ -15,5 +15,7 @@ z21 = []
 loco-core = "0.1"
 loco-dcc = "0.1"
 bitflags = "1.2"
+log = "0.4"
+num-traits = "0.2.14"
 
 [dev-dependencies]
