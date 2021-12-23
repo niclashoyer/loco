@@ -19,11 +19,11 @@ where
 	let wire_clk = Wire::new();
 	let wire_data = Wire::new_with_pull(WireState::High);
 
-	let writer_pin_clk = wire_clk.as_push_pull_pin();
-	let writer_pin_data = wire_data.as_open_drain_pin();
+	let writer_pin_clk = wire_clk.connect_push_pull_pin();
+	let writer_pin_data = wire_data.connect_open_drain_pin();
 
-	let reader_pin_clk = wire_clk.as_input_pin();
-	let reader_pin_data = wire_data.as_open_drain_pin();
+	let reader_pin_clk = wire_clk.connect_input_pin();
+	let reader_pin_data = wire_data.connect_open_drain_pin();
 
 	let mut clock = SimClock::new();
 	let writer_timer = clock.get_timer();

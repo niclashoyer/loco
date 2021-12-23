@@ -33,7 +33,7 @@ default-features = false
 
 [dev-dependencies]
 embedded-hal-mock = "0.8"
-embedded-hal-sync-pins = "0.4"
+embedded-hal-sync-pins = "0.5"
 embedded-hal-mock-clock = "0.1"
 linux-embedded-hal = "0.4.0-alpha.0"
 drogue-embedded-timer = "0.2"
