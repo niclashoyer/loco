@@ -2,7 +2,7 @@ use embedded_hal_mock_clock::*;
 use embedded_hal_sync_pins::wire::*;
 use embedded_time::duration::*;
 use log::trace;
-use test_env_log::test;
+use test_log::test;
 
 use loco_core::{
 	address::Address,
@@ -28,11 +28,10 @@ where
 	FS: FnMut(&mut DccWriter, &SimClock) -> nb::Result<(), Error>,
 	FR: FnMut(&mut DccReader, &SimClock) -> nb::Result<Vec<Message>, Error>,
 {
-	let wire_clk = Wire::new();
 	let wire_dcc = Wire::new_with_pull(WireState::High);
 
-	let writer_pin_dcc = wire_dcc.as_push_pull_pin();
-	let reader_pin_dcc = wire_dcc.as_input_pin();
+	let writer_pin_dcc = wire_dcc.connect_push_pull_pin();
+	let reader_pin_dcc = wire_dcc.connect_input_pin();
 
 	let mut clock = SimClock::new();
 	let writer_timer = clock.get_timer();
@@ -92,7 +91,7 @@ fn write_and_read_messages(msgs: Vec<Message>) {
 				msg = write_msgs.pop().unwrap();
 			}
 		} else if res != Err(nb::Error::WouldBlock) {
-			panic!(res);
+			panic!("{:?}", res);
 		}
 		Err(nb::Error::WouldBlock)
 	};
@@ -104,7 +103,7 @@ fn write_and_read_messages(msgs: Vec<Message>) {
 				return Ok(recv.clone());
 			}
 		} else if res != Err(nb::Error::WouldBlock) {
-			panic!(res);
+			panic!("{:?}", res);
 		}
 		Err(nb::Error::WouldBlock)
 	};

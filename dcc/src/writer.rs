@@ -1,5 +1,5 @@
-use embedded_hal::digital::ToggleableOutputPin;
-use embedded_hal::timer::CountDown;
+use embedded_hal::digital::blocking::ToggleableOutputPin;
+use embedded_hal::timer::nb::CountDown;
 use embedded_time::duration::*;
 
 use crate::message::Message;
@@ -54,7 +54,7 @@ where
 	}
 
 	fn toggle_pin(&mut self) -> Result<(), Error> {
-		self.pin_dcc.try_toggle().map_err(|_| Error::IOError)
+		self.pin_dcc.toggle().map_err(|_| Error::IOError)
 	}
 
 	fn start_timer(&mut self, bit: &Bit) -> Result<(), Error> {
@@ -63,14 +63,12 @@ where
 			Bit::Zero => ZERO_HALF_BIT,
 		};
 		self.timer
-			.try_start(d.microseconds())
+			.start(d.microseconds())
 			.map_err(|_| Error::TimerError)
 	}
 
 	fn wait_timer(&mut self) -> nb::Result<(), Error> {
-		self.timer
-			.try_wait()
-			.map_err(|e| e.map(|_| Error::TimerError))
+		self.timer.wait().map_err(|e| e.map(|_| Error::TimerError))
 	}
 }
 

@@ -1,16 +1,13 @@
 use embedded_hal_mock_clock::*;
 use embedded_hal_vcd::reader::VcdReader;
 use embedded_time::duration::*;
-use loco_dcc::{
-	message::Message,
-	reader::{PinDecoder, Reader},
-};
+use loco_dcc::reader::{PinDecoder, Reader};
 
 use log::debug;
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::BufReader;
-use test_env_log::test;
+use test_log::test;
 
 #[test]
 fn read() -> Result<(), std::io::Error> {

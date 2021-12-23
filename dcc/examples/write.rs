@@ -10,11 +10,8 @@ use loco_dcc::{
 	writer::{PinEncoder, Writer},
 };
 
-use log::debug;
-use std::convert::TryInto;
 use std::fs::File;
 use std::io::BufWriter;
-use test_env_log::test;
 
 fn main() -> Result<(), std::io::Error> {
 	env_logger::init();
@@ -40,8 +37,8 @@ fn main() -> Result<(), std::io::Error> {
 		if clock.elapsed() > timeout {
 			break;
 		}
-		vcd_writer.timestamp(clock.elapsed());
-		vcd_writer.sample();
+		vcd_writer.timestamp(clock.elapsed()).unwrap();
+		vcd_writer.sample().unwrap();
 		let _ = dcc_writer.write(&msg);
 		clock.tick(500_u64.nanoseconds());
 	}

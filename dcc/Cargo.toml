@@ -11,7 +11,7 @@ embedded-hal-vcd = { path = "../embedded-hal-vcd" }
 
 [dependencies]
 loco-core = "0.1"
-embedded-hal = "1.0.0-alpha.4"
+embedded-hal = "1.0.0-alpha.6"
 embedded-time = "0.10"
 nb = "1.0"
 log = "0.4"
@@ -23,6 +23,6 @@ default-features = false
 [dev-dependencies]
 embedded-hal-mock-clock = "0.1"
 embedded-hal-vcd = "0.1"
-embedded-hal-sync-pins = "0.3"
-test-env-log = "0.2"
+embedded-hal-sync-pins = "0.5"
+test-log = "0.2"
 env_logger = "0.8"

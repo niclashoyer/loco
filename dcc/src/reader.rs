@@ -1,5 +1,5 @@
-use embedded_hal::digital::InputPin;
-use embedded_hal::timer::CountDown;
+use embedded_hal::digital::blocking::InputPin;
+use embedded_hal::timer::nb::CountDown;
 use embedded_time::duration::*;
 use log::{debug, trace};
 
@@ -61,13 +61,13 @@ where
 {
 	fn start_timeout(&mut self) -> Result<(), Error> {
 		self.timer
-			.try_start(73.microseconds())
+			.start(73.microseconds())
 			.map_err(|_| Error::TimerError)?;
 		Ok(())
 	}
 
 	pub fn new(pin_dcc: DCC, timer: TIM) -> Self {
-		let last_pin_state = pin_dcc.try_is_high().unwrap_or(false);
+		let last_pin_state = pin_dcc.is_high().unwrap_or(false);
 		Self {
 			pin_dcc,
 			timer,
@@ -85,9 +85,9 @@ where
 {
 	fn decode(&mut self) -> nb::Result<Bit, Error> {
 		let mut ret = None;
-		let pin_state = self.pin_dcc.try_is_high().unwrap_or(false);
+		let pin_state = self.pin_dcc.is_high().unwrap_or(false);
 		if pin_state != self.last_pin_state {
-			if self.timer.try_wait().is_ok() {
+			if self.timer.wait().is_ok() {
 				ret = self.handle_half_bit(Bit::Zero);
 			} else {
 				ret = self.handle_half_bit(Bit::One);
