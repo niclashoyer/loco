@@ -77,7 +77,7 @@ fn write_and_read_messages(msgs: Vec<Msg>) {
 				msg = write_msgs.pop().unwrap();
 			}
 		} else if res != Err(nb::Error::WouldBlock) {
-			panic!(res);
+			panic!("{:?}", res);
 		}
 		Err(nb::Error::WouldBlock)
 	};
@@ -89,7 +89,7 @@ fn write_and_read_messages(msgs: Vec<Msg>) {
 				return Ok(recv.clone());
 			}
 		} else if res != Err(nb::Error::WouldBlock) {
-			panic!(res);
+			panic!("{:?}", res);
 		}
 		Err(nb::Error::WouldBlock)
 	};
@@ -159,7 +159,7 @@ fn timing_issues() {
 					}
 				}
 			} else if res != Err(nb::Error::WouldBlock) {
-				panic!(res);
+				panic!("{:?}", res);
 			}
 		} else {
 			// wait at least 10 ms to reset the reader
@@ -177,7 +177,7 @@ fn timing_issues() {
 				return Ok(recv.clone());
 			}
 		} else if res != Err(nb::Error::WouldBlock) {
-			panic!(res);
+			panic!("{:?}", res);
 		}
 		Err(nb::Error::WouldBlock)
 	};

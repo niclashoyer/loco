@@ -5,7 +5,7 @@ use thread_priority::*;
 use embedded_hal_sync_pins::wire::*;
 
 use drogue_embedded_timer::embedded_countdown;
-use embedded_hal::timer::CountDown;
+use embedded_hal::timer::nb::CountDown;
 use hal::SysTimer;
 use loco_core::drive::Direction;
 use loco_susi::message::Msg;
@@ -41,8 +41,7 @@ fn set_realtime_priority(prio: u32) {
 }
 
 type SusiWriter = loco_susi::writer::Writer<OpenDrainPin, PushPullPin, UsToStdCountDown<SysTimer>>;
-type SusiReader =
-	loco_susi::reader::Reader<OpenDrainPin, InputOnlyPin, MsToStdCountDown<SysTimer>>;
+type SusiReader = loco_susi::reader::Reader<OpenDrainPin, InputOnlyPin, MsToStdCountDown<SysTimer>>;
 
 fn write_and_read<FS: 'static, FR: 'static>(write: FS, read: FR) -> Vec<Msg>
 where
@@ -73,8 +72,7 @@ where
 		set_realtime_priority(90);
 		let timer = hal::SysTimer::new();
 		let timer = MsToStdCountDown::from(timer);
-		let reader =
-			loco_susi::reader::Reader::new(reader_pin_data, reader_pin_clk, timer);
+		let reader = loco_susi::reader::Reader::new(reader_pin_data, reader_pin_clk, timer);
 		read(reader)
 	});
 	let rec = reader.join().unwrap();
@@ -98,7 +96,7 @@ fn write_and_read_messages(msgs: Vec<Msg>) {
 				if let Ok(_) = res {
 					break;
 				} else if res != Err(nb::Error::WouldBlock) {
-					panic!(res);
+					panic!("{:?}", res);
 				}
 				let slept = std::time::Instant::now();
 				sleep(Duration::from_micros(50));
@@ -126,7 +124,7 @@ fn write_and_read_messages(msgs: Vec<Msg>) {
 					return recv;
 				}
 			} else if res != Err(nb::Error::WouldBlock) {
-				panic!(res);
+				panic!("{:?}", res);
 			}
 			let slept = std::time::Instant::now();
 			sleep(Duration::from_micros(50));

@@ -2,8 +2,8 @@
 
 use crate::message::Msg;
 use crate::Error;
-use embedded_hal::digital::{InputPin, OutputPin};
-use embedded_hal::timer::CountDown;
+use embedded_hal::digital::blocking::{InputPin, OutputPin};
+use embedded_hal::timer::nb::CountDown;
 use embedded_time::duration::*;
 
 const HALF_CLK_PERIOD: u32 = 200;
@@ -33,6 +33,7 @@ enum State {
 	Writing,
 	Waiting,
 	WaitingForAck,
+	#[allow(dead_code)] // still unimplemented
 	WaitingForReset,
 }
 
@@ -54,7 +55,7 @@ where
 	///                (the receiver will read on falling edges).
 	pub fn new(pin_data: DATA, mut pin_clk: CLK, timer: TIM) -> Self {
 		pin_clk
-			.try_set_low()
+			.set_low()
 			.unwrap_or_else(|_| panic!("can't init clock line"));
 		Self {
 			pin_data,
@@ -85,7 +86,7 @@ where
 			State::Writing | State::Waiting => {
 				if self.state == State::Waiting {
 					self.timer
-						.try_wait()
+						.wait()
 						.map_err(|e| e.map(|_| Error::TimerError))?;
 					self.state = State::Writing;
 					if self.bits_written == self.len * 8 {
@@ -100,17 +101,17 @@ where
 				if self.last_clk {
 					// last clk was high, so we just need a falling edge
 					// so that receivers can read our bit
-					self.pin_clk.try_set_low().map_err(|_| Error::IOError)?;
+					self.pin_clk.set_low().map_err(|_| Error::IOError)?;
 					self.last_clk = false;
 					self.bits_written += 1;
 					self.timer
-						.try_start(HALF_CLK_PERIOD.microseconds())
+						.start(HALF_CLK_PERIOD.microseconds())
 						.map_err(|_| Error::TimerError)?;
 					self.state = State::Waiting;
 				} else {
 					// last clock was low, so we need to bring it high again
 					// and get our data line ready
-					self.pin_clk.try_set_high().map_err(|_| Error::IOError)?;
+					self.pin_clk.set_high().map_err(|_| Error::IOError)?;
 					self.last_clk = true;
 					let byte = self.buf[(self.bits_written / 8) as usize];
 					let mask = 1 << (self.bits_written % 8);
@@ -119,12 +120,12 @@ where
 					// external pull up. Setting to high will write "0" using
 					// internal connection to GND (pulling low).
 					if is_high {
-						self.pin_data.try_set_low().map_err(|_| Error::IOError)?;
+						self.pin_data.set_low().map_err(|_| Error::IOError)?;
 					} else {
-						self.pin_data.try_set_high().map_err(|_| Error::IOError)?;
+						self.pin_data.set_high().map_err(|_| Error::IOError)?;
 					}
 					self.timer
-						.try_start(HALF_CLK_PERIOD.microseconds())
+						.start(HALF_CLK_PERIOD.microseconds())
 						.map_err(|_| Error::TimerError)?;
 					self.state = State::Waiting;
 				}

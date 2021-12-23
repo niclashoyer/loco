@@ -1,4 +1,4 @@
-pub use embedded_hal::timer::{Cancel, CountDown};
+pub use embedded_hal::timer::nb::{Cancel, CountDown};
 pub use embedded_hal_mock::pin;
 pub use embedded_time::duration::*;
 pub use embedded_time::rate::*;
@@ -19,12 +19,12 @@ impl CountDown for MockTimer {
 	type Error = ();
 	type Time = Nanoseconds<u64>;
 
-	fn try_start<T: Into<Nanoseconds<u64>>>(&mut self, timeout: T) -> Result<(), Self::Error> {
+	fn start<T: Into<Nanoseconds<u64>>>(&mut self, timeout: T) -> Result<(), Self::Error> {
 		self.count = timeout.into().0 * self.clock.0 / 1_000_000_000_u64;
 		Ok(())
 	}
 
-	fn try_wait(&mut self) -> nb::Result<(), Self::Error> {
+	fn wait(&mut self) -> nb::Result<(), Self::Error> {
 		if self.count > 0 {
 			self.count -= 1;
 		}
@@ -37,7 +37,7 @@ impl CountDown for MockTimer {
 }
 
 impl Cancel for MockTimer {
-	fn try_cancel(&mut self) -> Result<(), Self::Error> {
+	fn cancel(&mut self) -> Result<(), Self::Error> {
 		if self.count > 0 {
 			self.count = 0;
 			Ok(())

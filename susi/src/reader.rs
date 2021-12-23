@@ -2,8 +2,8 @@
 
 use crate::message::Msg;
 use crate::Error;
-use embedded_hal::digital::{InputPin, OutputPin};
-use embedded_hal::timer::CountDown;
+use embedded_hal::digital::blocking::{InputPin, OutputPin};
+use embedded_hal::timer::nb::CountDown;
 use embedded_time::duration::*;
 
 /// A reader for the SUSI protocol
@@ -42,7 +42,7 @@ where
 	/// * `pin_clk`  - An InputPin used to read the clock line
 	///                (falling edge reads a bit from `pin_data`)
 	pub fn new(pin_data: DATA, pin_clk: CLK, timer: TIM) -> Self {
-		let last_clk = pin_clk.try_is_high().unwrap_or(false);
+		let last_clk = pin_clk.is_high().unwrap_or(false);
 		Self {
 			pin_data,
 			pin_clk,
@@ -65,7 +65,7 @@ where
 	fn start_timeout(&mut self) -> Result<(), Error> {
 		self.state = State::WaitAfterByte;
 		self.timer
-			.try_start(8.milliseconds())
+			.start(8.milliseconds())
 			.map_err(|_| Error::TimerError)?;
 		Ok(())
 	}
@@ -79,11 +79,11 @@ where
 		}
 		// if we are not in idle state, check if the timer
 		// finished to sync again
-		if self.state == State::WaitAfterByte && self.timer.try_wait().is_ok() {
+		if self.state == State::WaitAfterByte && self.timer.wait().is_ok() {
 			self.reset();
 		}
 		// get current clock signal
-		let clk = self.pin_clk.try_is_high().map_err(|_| Error::IOError)?;
+		let clk = self.pin_clk.is_high().map_err(|_| Error::IOError)?;
 		// check if we have a falling edge
 		if self.last_clk && !clk {
 			if self.state == State::Idle {
@@ -91,7 +91,7 @@ where
 				self.start_timeout()?;
 			}
 			// read data on falling edge
-			let data = if self.pin_data.try_is_high().map_err(|_| Error::IOError)? {
+			let data = if self.pin_data.is_high().map_err(|_| Error::IOError)? {
 				1
 			} else {
 				0
@@ -129,15 +129,15 @@ where
 
 	pub fn ack(&mut self) -> nb::Result<(), Error> {
 		if self.state == State::WaitAcknowledge {
-			self.timer.try_wait().map_err(|_| Error::TimerError)?;
-			self.pin_data.try_set_low().map_err(|_| Error::IOError)?;
+			self.timer.wait().map_err(|_| Error::TimerError)?;
+			self.pin_data.set_low().map_err(|_| Error::IOError)?;
 			self.reset();
 			Ok(())
 		} else {
 			self.timer
-				.try_start(2.milliseconds())
+				.start(2.milliseconds())
 				.map_err(|_| Error::TimerError)?;
-			self.pin_data.try_set_high().map_err(|_| Error::IOError)?;
+			self.pin_data.set_high().map_err(|_| Error::IOError)?;
 			self.state = State::WaitAcknowledge;
 			Err(nb::Error::WouldBlock)
 		}
