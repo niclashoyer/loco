@@ -1,6 +1,5 @@
 use bitflags::bitflags;
 use loco_core::{
-	address::Address,
 	drive::{Direction, Speed},
 	functions::FunctionGroupNumber,
 	mov, xor, Bits,
@@ -26,6 +25,7 @@ impl Bits<u8> for CentralState {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // FIXME: add tests and methods to use accessory
 pub struct Accessory {
 	address: u8,
 	data: u8,
@@ -136,12 +136,9 @@ pub enum Error {
 
 impl<S: Bits<u8>> CentralMessage<S> {
 	pub fn to_buf(&self, buf: &mut [u8]) -> usize {
+		#[cfg(feature = "z21")]
+		use loco_core::add_xor;
 		use CentralMessage::*;
-		let add_xor = |buf: &mut [u8], len: usize| -> usize {
-			let x = buf[0..len - 1].iter().fold(0, |acc, x| acc ^ x);
-			buf[len - 1] = x;
-			len
-		};
 		match self {
 			TrackPowerOn => mov!(buf[0..3] <= &xor!([0x61, 0x01])),
 			TrackPowerOff => mov!(buf[0..3] <= &xor!([0x61, 0x00])),
