@@ -1,7 +1,8 @@
 use bitflags::bitflags;
-use embedded_nal::{UdpClient, UdpServer};
+use embedded_nal::{UdpClientStack, UdpFullStack};
 use loco_core::Bits;
 use loco_xpressnet as xnet;
+use log::{debug, info, trace};
 
 bitflags! {
 	pub struct CentralStateEx: u8 {
@@ -151,7 +152,7 @@ impl ClientMessage {
 			[0x10, 0x00] => Ok(GetSerialNumber),
 			[0x1A, 0x00] => Ok(GetHardwareInfo),
 			_ => {
-				println!("Unknown: {:#04X?}", bytes);
+				debug!("Unknown: {:#04X?}", bytes);
 				Err(Error::ParseCommand)
 			}
 		}
@@ -200,53 +201,60 @@ where
 
 	pub fn send<U, E>(
 		&mut self,
-		server: &U,
+		server: &mut U,
 		client: ClientAddress,
 		message: &CentralMessage,
 	) -> nb::Result<(), Error>
 	where
-		U: UdpServer<Error = E, UdpSocket = S>,
+		U: UdpFullStack<Error = E, UdpSocket = S>,
 		E: core::fmt::Debug,
 	{
 		let len = message.to_buf(&mut self.send_buf);
-		//println!("sending: ({:?},{:?})", client, message);
-		//println!("{:#04X?}", &self.send_buf[0..len]);
+		debug!("sending: ({:?},{:?})", client, message);
+		trace!("{:#04X?}", &self.send_buf[0..len]);
 		server
 			.send_to(&mut self.socket, client, &self.send_buf[0..len])
 			.map_err(|e| e.map(|_| Error::Send))
 	}
 
-	pub fn receive<U, E>(&mut self, server: &U) -> nb::Result<(ClientAddress, ClientMessage), Error>
+	pub fn receive<U, E>(
+		&mut self,
+		server: &mut U,
+	) -> nb::Result<(ClientAddress, ClientMessage), Error>
 	where
-		U: UdpServer<Error = E, UdpSocket = S>,
+		U: UdpFullStack<Error = E, UdpSocket = S>,
 		E: core::fmt::Debug,
 	{
 		let (num, addr) = server
 			.receive(&mut self.socket, &mut self.recv_buf)
 			.map_err(|e| e.map(|_| Error::Receive))?;
 		let msg = ClientMessage::from_bytes(&self.recv_buf[0..num])?;
-		//println!("received: ({:?},{:?})", addr, msg);
-		//println!("{:#04X?}", &self.recv_buf[0..num]);
+		debug!("received: ({:?},{:?})", addr, msg);
+		trace!("{:#04X?}", &self.recv_buf[0..num]);
 		Ok((addr, msg))
 	}
 }
 
 fn main() {
+	use env_logger::Env;
 	use nb::block;
-	use std_embedded_nal::STACK;
+	use std_embedded_nal::Stack;
 
 	const PORT: u16 = 21105;
 
-	let mut sock = STACK.socket().unwrap();
-	STACK.bind(&mut sock, PORT).unwrap();
+	env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
-	println!("listening on port {}", PORT);
+	let mut stack = Stack::default();
+	let mut sock = stack.socket().unwrap();
+	stack.bind(&mut sock, PORT).unwrap();
+
+	info!("listening on port {}", PORT);
 
 	let mut server = Server::new(sock);
 	loop {
-		let recv = block!(server.receive(&STACK));
+		let recv = block!(server.receive(&mut stack));
 		if let Ok((addr, msg)) = recv {
-			println!("received: {:?}", (addr, msg.clone()));
+			debug!("received: {:?}", (addr, msg.clone()));
 			use CentralMessage::*;
 			use ClientMessage::*;
 			match msg {
@@ -261,11 +269,11 @@ fn main() {
 						central_state: CentralState::SHORT_CIRCUIT,
 						central_state_ex: CentralStateEx::empty(),
 					};
-					block!(server.send(&STACK, addr, &state)).unwrap();
+					block!(server.send(&mut stack, addr, &state)).unwrap();
 				}
 				GetSerialNumber => {
 					let sn = SerialNumber(58625);
-					block!(server.send(&STACK, addr, &sn)).unwrap();
+					block!(server.send(&mut stack, addr, &sn)).unwrap();
 				}
 				GetHardwareInfo => {
 					let msg = HardwareInfo(
@@ -275,18 +283,18 @@ fn main() {
 							minor: 1,
 						},
 					);
-					block!(server.send(&STACK, addr, &msg)).unwrap();
+					block!(server.send(&mut stack, addr, &msg)).unwrap();
 				}
 				ClientMessage::XpressNet(xnet::DeviceMessage::GetVersion) => {
 					let msg = CentralMessage::XpressNet(xnet::CentralMessage::Version(30, 0x12));
-					block!(server.send(&STACK, addr, &msg)).unwrap();
+					block!(server.send(&mut stack, addr, &msg)).unwrap();
 				}
 				ClientMessage::XpressNet(xnet::DeviceMessage::GetState) => {
 					let state = CentralState::empty();
 					let msg = CentralMessage::XpressNet(xnet::CentralMessage::State(state));
-					block!(server.send(&STACK, addr, &msg)).unwrap();
+					block!(server.send(&mut stack, addr, &msg)).unwrap();
 					let msg = CentralMessage::XpressNet(xnet::CentralMessage::TrackPowerOn);
-					block!(server.send(&STACK, addr, &msg)).unwrap();
+					block!(server.send(&mut stack, addr, &msg)).unwrap();
 				}
 				ClientMessage::XpressNet(xnet::DeviceMessage::LocoDrive(
 					loco_address,
@@ -305,7 +313,7 @@ fn main() {
 						double_heading: false,
 						smart_search: false,
 					});
-					block!(server.send(&STACK, addr, &msg)).unwrap();
+					block!(server.send(&mut stack, addr, &msg)).unwrap();
 				}
 				_ => {}
 			}
