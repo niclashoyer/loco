@@ -2,12 +2,14 @@ use bitflags::bitflags;
 #[cfg(feature = "z21")]
 use loco_core::functions::Function;
 use loco_core::{
+	address::Address,
 	drive::{Direction, Speed},
 	functions::FunctionGroupNumber,
 	mov, xor, Bits,
 };
 use loco_dcc::{direction::DccDirection, function::FunctionGroupByte, speed::DccSpeed};
 use log::debug;
+#[cfg(feature = "z21")]
 use num_traits::cast::FromPrimitive;
 
 bitflags! {
@@ -37,10 +39,10 @@ pub struct Accessory {
 
 #[derive(Debug, Clone)]
 pub enum SearchResult {
-	Loco(u16),
-	DoubleHeading(u16),
-	ConsistBase(u16),
-	Consist(u16),
+	Loco(Address),
+	DoubleHeading(Address),
+	ConsistBase(Address),
+	Consist(Address),
 	None,
 }
 
@@ -105,9 +107,9 @@ pub enum CentralMessage<S: Bits<u8>> {
 		speed: Speed,
 		f0: FunctionGroupByte,
 		f1: FunctionGroupByte,
-		other_address: u16,
+		other_address: Address,
 	},
-	LocoOccupied(u16),
+	LocoOccupied(Address),
 	FunctionToggled0 {
 		f0: FunctionGroupByte,
 		f1: FunctionGroupByte,
@@ -120,7 +122,7 @@ pub enum CentralMessage<S: Bits<u8>> {
 	Error(CentralError),
 	#[cfg(feature = "z21")]
 	Z21LocoInformation {
-		loco_address: u16,
+		loco_address: Address,
 		is_free: bool,
 		direction: Direction,
 		speed: Speed,
@@ -166,7 +168,7 @@ impl<S: Bits<u8>> CentralMessage<S> {
 				smart_search,
 			} => {
 				buf[0] = 0xEF;
-				mov!(buf[1..=2] <= &loco_address.to_le_bytes());
+				mov!(buf[1..=2] <= &loco_address.num.to_le_bytes());
 				let code = match speed {
 					Speed::Steps14(_) => 0,
 					Speed::Steps28(_) => 2,
@@ -230,7 +232,7 @@ pub enum DeviceMessage {
 	TrackPowerOn,
 	TrackPowerOff,
 	EmergencyStop,
-	LocoEmergencyStop(u16),
+	LocoEmergencyStop(Address),
 	ProgrammingReadRegister(u8),
 	ProgrammingReadDirect(u16),
 	ProgrammingReadPaged(u8),
@@ -242,46 +244,46 @@ pub enum DeviceMessage {
 	GetState,
 	GetAccessory(Accessory),     // FIXME
 	ControlAccessory(Accessory), // FIXME
-	GetLocoInformation(u16),
+	GetLocoInformation(Address),
 	GetFunctionToggled0(u16),
 	GetFunctionToggled1(u16),
 	GetFunctionState(u16),
-	LocoDrive(u16, Direction, Speed),
+	LocoDrive(Address, Direction, Speed),
 	SetFunctionGroup(FunctionGroupNumber, FunctionGroupByte),
 	SetFunctionToggled(FunctionGroupNumber, FunctionGroupByte),
 	#[cfg(feature = "z21")]
-	Z21SetFunction(u16, FunctionSwitch, Function),
+	Z21SetFunction(Address, FunctionSwitch, Function),
 	SetRefreshMode(RefreshMode),
-	AddDoubleHeading(u16, u16),
-	RemoveDoubleHeading(u16),
+	AddDoubleHeading(Address, Address),
+	RemoveDoubleHeading(Address),
 	ProgrammingOnMainWrite {
-		loco_address: u16,
+		loco_address: Address,
 		cv_address: u16,
 		value: u8,
 	},
 	ProgrammingOnMainRead {
-		loco_address: u16,
+		loco_address: Address,
 		cv_address: u16,
 		value: u8,
 	},
 	ProgrammingOnMainWriteBit {
-		loco_address: u16,
+		loco_address: Address,
 		cv_address: u16,
 		position: u8,
 		value: bool,
 	},
 	AddConsist {
 		inverted: bool,
-		loco_address: u16,
+		loco_address: Address,
 		base_address: u8,
 	},
 	RemoveConsist {
-		loco_address: u16,
+		loco_address: Address,
 		base_address: u8,
 	},
 	SearchConsistMember {
 		forward: bool,
-		loco_address: u16,
+		loco_address: Address,
 		base_address: u8,
 	},
 	SearchConsistBase {
@@ -290,9 +292,9 @@ pub enum DeviceMessage {
 	},
 	SearchLocoInStack {
 		forward: bool,
-		loco_address: u16,
+		loco_address: Address,
 	},
-	RemoveFromStack(u16),
+	RemoveFromStack(Address),
 }
 
 impl DeviceMessage {
@@ -310,13 +312,16 @@ impl DeviceMessage {
 			[0x21, 0x81, 0xA0, ..] => Ok(TrackPowerOn),
 			[0x21, 0x80, 0xA1, ..] => Ok(TrackPowerOff),
 			[0x80, 0x80, ..] => Ok(EmergencyStop),
-			[0x92, h, l, _, ..] => check_xor(4, LocoEmergencyStop(u16::from_le_bytes([*h, *l]))),
+			[0x92, h, l, _, ..] => check_xor(
+				4,
+				LocoEmergencyStop(Address::new(u16::from_le_bytes([*l, *h]))),
+			),
 			[0x21, 0x21, 0x00, ..] => Ok(GetVersion),
 			[0x21, 0x24, 0x05, ..] => Ok(GetState),
 			[0xE4, 0x10, h, l, rv, _, ..] => check_xor(
 				6,
 				LocoDrive(
-					u16::from_le_bytes([*h, *l]),
+					Address::new(u16::from_le_bytes([*l, *h])),
 					Direction::from_advanced_byte(*rv),
 					Speed::from_byte_14_steps(*rv),
 				),
@@ -324,7 +329,7 @@ impl DeviceMessage {
 			[0xE4, 0x12, h, l, rv, _, ..] => check_xor(
 				6,
 				LocoDrive(
-					u16::from_le_bytes([*h, *l]),
+					Address::new(u16::from_le_bytes([*l, *h])),
 					Direction::from_advanced_byte(*rv),
 					Speed::from_byte_28_steps(*rv),
 				),
@@ -332,7 +337,7 @@ impl DeviceMessage {
 			[0xE4, 0x13, h, l, rv, _, ..] => check_xor(
 				6,
 				LocoDrive(
-					u16::from_le_bytes([*h, *l]),
+					Address::new(u16::from_le_bytes([*l, *h])),
 					Direction::from_advanced_byte(*rv),
 					Speed::from_byte_128_steps(*rv),
 				),
@@ -341,7 +346,7 @@ impl DeviceMessage {
 			[0xE4, 0xF8, h, l, b, _, ..] => check_xor(
 				6,
 				Z21SetFunction(
-					u16::from_le_bytes([*h, *l]),
+					Address::new(u16::from_le_bytes([*l, *h])),
 					FunctionSwitch::from_byte(*b),
 					Function::from_u8(*b & 0x3F).unwrap(),
 				),
