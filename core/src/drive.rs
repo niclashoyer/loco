@@ -1,10 +1,10 @@
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Copy)]
 pub enum Direction {
 	Forward,
 	Backward,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Copy)]
 pub enum Speed {
 	Stop,
 	EmergencyStop,
