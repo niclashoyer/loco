@@ -1,6 +1,6 @@
 use num_derive::{FromPrimitive, ToPrimitive};
 
-#[derive(Clone, Debug, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Clone, Debug, PartialEq, FromPrimitive, ToPrimitive, Copy)]
 pub enum Function {
 	F0 = 0,
 	F1,
@@ -73,7 +73,7 @@ pub enum Function {
 	F68,
 }
 
-#[derive(Clone, Debug, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Clone, Debug, PartialEq, FromPrimitive, ToPrimitive, Copy)]
 pub enum FunctionGroupNumber {
 	G1 = 1,
 	G2,
