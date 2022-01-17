@@ -4,13 +4,8 @@ version = "0.1.0"
 authors = ["Niclas Hoyer <info@niclashoyer.de>"]
 edition = "2018"
 
-[patch.crates-io]
-loco-core = { path = "../core" }
-embedded-hal-mock-clock = { path = "../embedded-hal-mock-clock" }
-embedded-hal-vcd = { path = "../embedded-hal-vcd" }
-
 [dependencies]
-loco-core = "0.1"
+loco-core = { path = "../core", version = "0.1" }
 embedded-hal = "1.0.0-alpha.6"
 embedded-time = "0.10"
 nb = "1.0"

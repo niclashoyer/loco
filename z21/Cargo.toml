@@ -6,16 +6,11 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[patch.crates-io]
-loco-dcc = { path = "../dcc" }
-loco-core = { path = "../core" }
-loco-xpressnet = { path = "../xpressnet" }
-
 [dependencies]
 embedded-nal = "0.6"
 bitflags = "1.2"
-loco-core = "0.1"
-loco-xpressnet = { version = "0.1", features = ["z21"] }
+loco-core = { path = "../core", version = "0.1" }
+loco-xpressnet = { path = "../xpressnet", version = "0.1", features = ["z21"] }
 nb = "1.0"
 std-embedded-nal = "0.1.2"
 log = "0.4"

@@ -1,0 +1,22 @@
+[workspace]
+
+members = [
+  "core",
+  "command-station",
+  "command-station/examples/linux-dcc",
+  "dcc",
+  "susi",
+  "xpressnet",
+  "z21"
+]
+
+[patch.crates-io]
+# patches needed to adapt to embedded-hal 1.0.0
+embedded-hal-mock = { git = "https://github.com/niclashoyer/embedded-hal-mock", branch = "hal-1.0.0" }
+drogue-embedded-timer = { git = "https://github.com/niclashoyer/drogue-embedded-timer", branch = "hal-1.0.0" }
+linux-embedded-hal = { git = "https://github.com/caemor/linux-embedded-hal" }
+
+# unreleased
+embedded-hal-mock-clock = { path = "../embedded-hal-mock-clock" }
+embedded-hal-vcd = { path = "../embedded-hal-vcd" }
+

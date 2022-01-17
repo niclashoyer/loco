@@ -8,20 +8,9 @@ edition = "2018"
 default = ["std"]
 std = []
 
-[patch.crates-io]
-# patches needed to adapt to embedded-hal 1.0.0
-embedded-hal-mock = { git = "https://github.com/niclashoyer/embedded-hal-mock", branch = "hal-1.0.0" }
-drogue-embedded-timer = { git = "https://github.com/niclashoyer/drogue-embedded-timer", branch = "hal-1.0.0" }
-linux-embedded-hal = { git = "https://github.com/caemor/linux-embedded-hal" }
-
-# unreleased
-loco-core = { path = "../core" }
-loco-dcc = { path = "../dcc" }
-embedded-hal-mock-clock = { path = "../embedded-hal-mock-clock" }
-
 [dependencies]
-loco-core = "0.1"
-loco-dcc = "0.1"
+loco-core = { path = "../core", version = "0.1" }
+loco-dcc = { path = "../dcc", version = "0.1" }
 embedded-hal = "1.0.0-alpha.6"
 embedded-time = "0.10"
 nb = "1.0"

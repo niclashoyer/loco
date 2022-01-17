@@ -4,16 +4,12 @@ version = "0.1.0"
 authors = ["Niclas Hoyer <info@niclashoyer.de>"]
 edition = "2018"
 
-[patch.crates-io]
-loco-core = { path = "../core" }
-loco-dcc = { path = "../dcc" }
-
 [features]
 z21 = []
 
 [dependencies]
-loco-core = "0.1"
-loco-dcc = "0.1"
+loco-core = { path = "../core", version = "0.1" }
+loco-dcc = { path = "../dcc", version = "0.1" }
 bitflags = "1.2"
 log = "0.4"
 num-traits = "0.2.14"
