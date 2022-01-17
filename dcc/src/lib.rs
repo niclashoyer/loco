@@ -8,6 +8,6 @@ pub mod writer;
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
-	IOError,
-	TimerError,
+    IOError,
+    TimerError,
 }

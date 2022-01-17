@@ -10,6 +10,6 @@ pub mod tests_mock;
 /// Errors returned from a SUSI receiver or sender
 #[derive(Debug, PartialEq)]
 pub enum Error {
-	IOError,
-	TimerError,
+    IOError,
+    TimerError,
 }
