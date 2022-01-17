@@ -1,0 +1,41 @@
+[package]
+name = "loco-susi"
+version = "0.1.0"
+authors = ["Niclas Hoyer <niclas@verbugt.de>"]
+edition = "2018"
+
+[features]
+default = ["std"]
+std = []
+
+[patch.crates-io]
+# patches needed to adapt to embedded-hal 1.0.0
+embedded-hal-mock = { git = "https://github.com/niclashoyer/embedded-hal-mock", branch = "hal-1.0.0" }
+drogue-embedded-timer = { git = "https://github.com/niclashoyer/drogue-embedded-timer", branch = "hal-1.0.0" }
+linux-embedded-hal = { git = "https://github.com/caemor/linux-embedded-hal" }
+
+# unreleased
+loco-core = { path = "../core" }
+loco-dcc = { path = "../dcc" }
+embedded-hal-mock-clock = { path = "../embedded-hal-mock-clock" }
+
+[dependencies]
+loco-core = "0.1"
+loco-dcc = "0.1"
+embedded-hal = "1.0.0-alpha.6"
+embedded-time = "0.10"
+nb = "1.0"
+num-derive = "0.3"
+
+[dependencies.num-traits]
+version = "0.2"
+default-features = false
+
+[dev-dependencies]
+embedded-hal-mock = "0.8"
+embedded-hal-sync-pins = "0.5"
+embedded-hal-mock-clock = "0.1"
+linux-embedded-hal = "0.4.0-alpha.0"
+drogue-embedded-timer = "0.2"
+thread-priority = "0.2"
+serial_test = "0.5"
