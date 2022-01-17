@@ -7,7 +7,7 @@ macro_rules! xor {
 
 #[macro_export]
 macro_rules! mov {
-	( $b:ident[$p:expr] <= $($x:tt)* ) => {{
+	( $b:ident[$p:expr] <- $($x:tt)* ) => {{
 		$b[$p].copy_from_slice($($x)*);
 		$b[$p].len()
 	}};

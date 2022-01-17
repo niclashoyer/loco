@@ -146,14 +146,14 @@ impl<S: Bits<u8>> CentralMessage<S> {
         use loco_core::add_xor;
         use CentralMessage::*;
         match self {
-            TrackPowerOn => mov!(buf[0..3] <= &xor!([0x61, 0x01])),
-            TrackPowerOff => mov!(buf[0..3] <= &xor!([0x61, 0x00])),
-            EmergencyStop => mov!(buf[0..3] <= &xor!([0x81, 0x00])),
-            Version(u, l) => mov!(buf[0..5] <= &xor!([0x63, 0x21, *u, *l])),
-            State(state) => mov!(buf[0..4] <= &xor!([0x62, 0x22, state.bits()])),
-            TransferError => mov!(buf[0..3] <= &xor!([0x61, 0x80])),
-            StationBusy => mov!(buf[0..3] <= &xor!([0x61, 0x81])),
-            UnknownCommand => mov!(buf[0..3] <= &xor!([0x61, 0x82])),
+            TrackPowerOn => mov!(buf[0..3] <- &xor!([0x61, 0x01])),
+            TrackPowerOff => mov!(buf[0..3] <- &xor!([0x61, 0x00])),
+            EmergencyStop => mov!(buf[0..3] <- &xor!([0x81, 0x00])),
+            Version(u, l) => mov!(buf[0..5] <- &xor!([0x63, 0x21, *u, *l])),
+            State(state) => mov!(buf[0..4] <- &xor!([0x62, 0x22, state.bits()])),
+            TransferError => mov!(buf[0..3] <- &xor!([0x61, 0x80])),
+            StationBusy => mov!(buf[0..3] <- &xor!([0x61, 0x81])),
+            UnknownCommand => mov!(buf[0..3] <- &xor!([0x61, 0x82])),
             #[cfg(feature = "z21")]
             Z21LocoInformation {
                 loco_address,
@@ -168,7 +168,7 @@ impl<S: Bits<u8>> CentralMessage<S> {
                 smart_search,
             } => {
                 buf[0] = 0xEF;
-                mov!(buf[1..=2] <= &loco_address.num.to_le_bytes());
+                mov!(buf[1..=2] <- &loco_address.num.to_le_bytes());
                 let code = match speed {
                     Speed::Steps14(_) => 0,
                     Speed::Steps28(_) => 2,

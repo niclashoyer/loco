@@ -1,6 +1,6 @@
 use bitflags::bitflags;
 use embedded_nal::{UdpClientStack, UdpFullStack};
-use loco_core::Bits;
+use loco_core::{mov, Bits};
 use loco_xpressnet as xnet;
 use log::{debug, info, trace};
 
@@ -80,13 +80,6 @@ pub enum CentralMessage {
     XpressNet(xnet::CentralMessage<CentralState>),
 }
 
-macro_rules! mov {
-	( $b:ident[$p:expr] <= $($x:tt)* ) => {{
-		$b[$p].copy_from_slice($($x)*);
-		$b[$p].len()
-	}};
-}
-
 impl CentralMessage {
     pub fn to_buf(&self, buf: &mut [u8]) -> usize {
         use CentralMessage::*;
@@ -101,26 +94,26 @@ impl CentralMessage {
                 central_state,
                 central_state_ex,
             } => {
-                mov!(buf[0..=3] <= &[0x14, 0x00, 0x84, 0x00]);
-                mov!(buf[4..=5] <= &main_current.to_le_bytes());
-                mov!(buf[6..=7] <= &prog_current.to_le_bytes());
-                mov!(buf[8..=9] <= &filtered_main_current.to_le_bytes());
-                mov!(buf[10..=11] <= &temperature.to_le_bytes());
-                mov!(buf[12..=13] <= &supply_voltage.to_le_bytes());
-                mov!(buf[14..=15] <= &vcc_voltage.to_le_bytes());
-                mov!(buf[16..=19] <= &[central_state.bits, central_state_ex.bits, 0x00, 0x00]);
+                mov!(buf[0..=3] <- &[0x14, 0x00, 0x84, 0x00]);
+                mov!(buf[4..=5] <- &main_current.to_le_bytes());
+                mov!(buf[6..=7] <- &prog_current.to_le_bytes());
+                mov!(buf[8..=9] <- &filtered_main_current.to_le_bytes());
+                mov!(buf[10..=11] <- &temperature.to_le_bytes());
+                mov!(buf[12..=13] <- &supply_voltage.to_le_bytes());
+                mov!(buf[14..=15] <- &vcc_voltage.to_le_bytes());
+                mov!(buf[16..=19] <- &[central_state.bits, central_state_ex.bits, 0x00, 0x00]);
                 20
             }
             SerialNumber(num) => {
-                mov!(buf[0..=1] <= &[0x10, 0x11]);
-                mov!(buf[2..=5] <= &num.to_le_bytes());
+                mov!(buf[0..=1] <- &[0x10, 0x11]);
+                mov!(buf[2..=5] <- &num.to_le_bytes());
                 6
             }
             XpressNet(xmsg) => {
-                mov!(buf[2..=3] <= &[0x40, 0x00]);
+                mov!(buf[2..=3] <- &[0x40, 0x00]);
                 let xnum = xmsg.to_buf(&mut buf[4..]);
                 let size = 4 + xnum;
-                mov!(buf[0..=1] <= &(size as u16).to_le_bytes());
+                mov!(buf[0..=1] <- &(size as u16).to_le_bytes());
                 size
             }
             _ => unimplemented!(),

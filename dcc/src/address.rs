@@ -18,7 +18,7 @@ impl DccAddress for Address {
 
     fn to_buf(&self, buf: &mut [u8]) -> usize {
         if self.num > 127 {
-            mov!(buf[0..=1] <= &self.num.to_le_bytes());
+            mov!(buf[0..=1] <- &self.num.to_le_bytes());
             buf[0] |= 0xC0;
             2
         } else {
