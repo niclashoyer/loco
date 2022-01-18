@@ -2,7 +2,7 @@
 name = "loco-dcc"
 version = "0.1.0"
 authors = ["Niclas Hoyer <info@niclashoyer.de>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 loco-core = { path = "../core", version = "0.1" }

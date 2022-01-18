@@ -2,7 +2,7 @@
 name = "loco-susi"
 version = "0.1.0"
 authors = ["Niclas Hoyer <niclas@verbugt.de>"]
-edition = "2018"
+edition = "2021"
 
 [features]
 default = ["std"]
