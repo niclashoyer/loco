@@ -1,4 +1,4 @@
-use embedded_hal_mock_clock::*;
+use embedded_hal_mock::timer::*;
 use embedded_hal_vcd::writer::VcdWriterBuilder;
 use embedded_time::duration::*;
 use loco_core::{
@@ -27,7 +27,7 @@ fn main() -> Result<(), std::io::Error> {
     let encoder = PinEncoder::new(out_pin, writer_timer);
     let mut dcc_writer = Writer::new(encoder);
 
-    let timeout = 500_u32.milliseconds();
+    let timeout = 500.milliseconds();
 
     let addr = Address { num: 23 };
     let msg = Message::Drive(addr, Direction::Forward, Speed::Steps28(14));
@@ -40,7 +40,7 @@ fn main() -> Result<(), std::io::Error> {
         vcd_writer.timestamp(clock.elapsed()).unwrap();
         vcd_writer.sample().unwrap();
         let _ = dcc_writer.write(&msg);
-        clock.tick(500_u64.nanoseconds());
+        clock.tick(500.nanoseconds());
     }
 
     Ok(())

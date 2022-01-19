@@ -181,7 +181,7 @@ mod tests {
         }
         let clk = Mock::new(&clk_states);
         // add a mocked timer
-        let timer = MockTimer::new(128_000u64.Hz());
+        let timer = MockTimer::new(Hertz(128_000_u64));
         (data, clk, timer, bits)
     }
 

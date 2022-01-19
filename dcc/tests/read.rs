@@ -1,4 +1,4 @@
-use embedded_hal_mock_clock::*;
+use embedded_hal_mock::timer::*;
 use embedded_hal_vcd::reader::VcdReader;
 use embedded_time::duration::*;
 use loco_dcc::reader::{PinDecoder, Reader};
@@ -39,7 +39,7 @@ fn read() -> Result<(), std::io::Error> {
         if let Ok(msg) = dcc_reader.read() {
             debug!("read: {:?}", msg);
         }
-        clock.tick(500_u64.nanoseconds());
+        clock.tick(500.nanoseconds());
     }
 
     Ok(())

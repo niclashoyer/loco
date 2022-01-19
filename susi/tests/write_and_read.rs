@@ -1,4 +1,4 @@
-use embedded_hal_mock_clock::*;
+use embedded_hal_mock::timer::*;
 use embedded_time::duration::*;
 
 use embedded_hal_sync_pins::wire::*;
@@ -56,7 +56,7 @@ where
         if writer_done && reader_done {
             break;
         }
-        clock.tick(100_u64.nanoseconds());
+        clock.tick(100.nanoseconds());
     }
     recv
 }

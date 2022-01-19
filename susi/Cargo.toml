@@ -12,7 +12,7 @@ std = []
 loco-core = { path = "../core", version = "0.1" }
 loco-dcc = { path = "../dcc", version = "0.1" }
 embedded-hal = "1.0.0-alpha.6"
-embedded-time = "0.10"
+embedded-time = "0.12"
 nb = "1.0"
 num-derive = "0.3"
 
@@ -23,7 +23,6 @@ default-features = false
 [dev-dependencies]
 embedded-hal-mock = "0.8"
 embedded-hal-sync-pins = "0.5"
-embedded-hal-mock-clock = "0.1"
 linux-embedded-hal = "0.4.0-alpha.0"
 drogue-embedded-timer = "0.2"
 thread-priority = "0.2"

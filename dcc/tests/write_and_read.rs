@@ -1,4 +1,4 @@
-use embedded_hal_mock_clock::*;
+use embedded_hal_mock::timer::*;
 use embedded_hal_sync_pins::wire::*;
 use embedded_time::duration::*;
 use log::trace;
@@ -49,11 +49,9 @@ where
         if clock.elapsed() > timeout.milliseconds() {
             panic!("simulation timed out");
         }
-        if !writer_done {
-            if let Ok(_) = write(&mut writer, &clock) {
-                writer_done = true;
-                println!("writer done");
-            }
+        if !writer_done && write(&mut writer, &clock).is_ok() {
+            writer_done = true;
+            println!("writer done");
         }
         if !reader_done {
             if let Ok(msgs) = read(&mut reader, &clock) {
@@ -65,12 +63,10 @@ where
         if writer_done && reader_done {
             break;
         }
-        if !writer_done {
-            if clock.elapsed().0 % 10_000 == 0 {
-                trace!("clock: {}µs", clock.elapsed() / 1000);
-            }
+        if !writer_done && clock.elapsed().0 % 10_000 == 0 {
+            trace!("clock: {}µs", clock.elapsed() / 1000);
         }
-        clock.tick(1000_u64.nanoseconds());
+        clock.tick(1000.nanoseconds());
     }
     recv
 }
@@ -84,7 +80,7 @@ fn write_and_read_messages(msgs: Vec<Message>) {
 
     let writer = move |writer: &mut DccWriter, _clock: &SimClock| {
         let res = writer.write(&msg);
-        if let Ok(_) = res {
+        if res.is_ok() {
             if write_msgs.is_empty() {
                 return Ok(());
             } else {
