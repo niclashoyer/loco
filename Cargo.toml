@@ -15,7 +15,3 @@ members = [
 embedded-hal-mock = { git = "https://github.com/niclashoyer/embedded-hal-mock", branch = "timers" }
 drogue-embedded-timer = { git = "https://github.com/niclashoyer/drogue-embedded-timer", branch = "hal-1.0.0" }
 linux-embedded-hal = { git = "https://github.com/caemor/linux-embedded-hal" }
-
-# unreleased
-embedded-hal-vcd = { path = "../embedded-hal-vcd" }
-
