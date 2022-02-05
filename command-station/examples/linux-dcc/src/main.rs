@@ -75,14 +75,17 @@ fn main() {
             )
             .unwrap();
             stdout.flush().unwrap();
-            let mut spd = Speed::Stop;
-            let mut dir = Direction::Forward;
-            if speed > 0 {
-                spd = Speed::Steps128(speed.abs() as u8);
-            } else if speed < 0 {
-                spd = Speed::Steps128(speed.abs() as u8);
-                dir = Direction::Backward;
-            }
+            let dir = if speed >= 0 {
+                Direction::Forward
+            } else {
+                Direction::Backward
+            };
+            let spd = if speed == 0 {
+                Speed::Stop
+            } else {
+                Speed::Steps128(speed.abs() as u8)
+            };
+
             station.loco_set_drive(addr, spd, dir);
         }
     }

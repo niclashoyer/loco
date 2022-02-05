@@ -1,5 +1,6 @@
 use loco_core::{address::Address, mov};
 
+#[allow(clippy::len_without_is_empty)]
 pub trait DccAddress {
     fn from_bytes(bytes: &[u8]) -> Address;
     fn to_buf(&self, buf: &mut [u8]) -> usize;

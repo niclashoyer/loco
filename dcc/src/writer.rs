@@ -171,7 +171,7 @@ where
             self.state = Writing(*bit);
         }
         self.state = Writing(*bit);
-        self.encoder.write(&bit)?;
+        self.encoder.write(bit)?;
         self.bits_written += 1;
         Ok(())
     }
@@ -245,7 +245,7 @@ where
                 self.write_end()?;
                 debug!("finished");
                 self.state = Idle;
-                return Ok(());
+                Ok(())
             }
         }
     }

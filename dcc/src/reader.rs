@@ -113,7 +113,7 @@ where
     fn handle_half_bit(&mut self, bit: Bit) -> Option<Bit> {
         trace!(
             "{:<20}{:<20}",
-            format!("edge detected"),
+            "edge detected".to_string(),
             format!("{:?}/{:?}", self.last_half_bit, bit)
         );
         if self.last_half_bit == Some(bit) {

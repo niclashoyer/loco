@@ -11,6 +11,7 @@ pub enum Message {
     Drive(Address, Direction, Speed),
 }
 
+#[allow(clippy::unusual_byte_groupings)]
 impl Message {
     pub fn from_bytes(bytes: &[u8]) -> Self {
         use Message::*;
