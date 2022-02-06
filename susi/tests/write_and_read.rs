@@ -40,11 +40,9 @@ where
         if clock.elapsed() > timeout.milliseconds() {
             panic!("simulation timed out");
         }
-        if !writer_done {
-            if let Ok(_) = write(&mut writer, &clock) {
-                writer_done = true;
-                println!("writer done");
-            }
+        if !writer_done && write(&mut writer, &clock).is_ok() {
+            writer_done = true;
+            println!("writer done");
         }
         if !reader_done {
             if let Ok(msgs) = read(&mut reader, &clock) {
@@ -70,7 +68,7 @@ fn write_and_read_messages(msgs: Vec<Msg>) {
 
     let writer = move |writer: &mut SusiWriter, _clock: &SimClock| {
         let res = writer.write(&msg);
-        if let Ok(_) = res {
+        if res.is_ok() {
             if write_msgs.is_empty() {
                 return Ok(());
             } else {
@@ -144,7 +142,7 @@ fn timing_issues() {
                 }
             }
             let res = writer.write(&msg);
-            if let Ok(_) = res {
+            if res.is_ok() {
                 if write_msgs.is_empty() {
                     return Ok(());
                 } else {
@@ -153,7 +151,7 @@ fn timing_issues() {
                         // one message left, lets corrupt the timing while writeing
                         shift = Some(clock.elapsed());
                     }
-                    if write_msgs.len() == 0 {
+                    if write_msgs.is_empty() {
                         // no message left, reset now to get the last message right again
                         reset = Some(clock.elapsed());
                     }

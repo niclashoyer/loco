@@ -174,8 +174,7 @@ mod tests {
         }
         let data = Mock::new(&data_states);
         // add pin states for clock line
-        let mut clk_states = vec![];
-        clk_states.push(Transaction::set(State::Low));
+        let mut clk_states = vec![Transaction::set(State::Low)];
         for _i in 0..bits {
             clk_states.push(Transaction::set(State::High));
             clk_states.push(Transaction::set(State::Low));

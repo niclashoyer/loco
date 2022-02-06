@@ -157,9 +157,9 @@ mod tests {
         let bits = bytes * 8;
         // add pin states for data line
         let mut data_states = vec![];
-        for i in 0..bytes {
+        for byte in word {
             for j in 0..8 {
-                if (word[i] >> j) & 0x01 == 1 {
+                if (byte >> j) & 0x01 == 1 {
                     data_states.push(Transaction::get(State::High));
                 } else {
                     data_states.push(Transaction::get(State::Low));
@@ -173,8 +173,7 @@ mod tests {
         }
         let data = Mock::new(&data_states);
         // add pin states for clock line
-        let mut clk_states = vec![];
-        clk_states.push(Transaction::get(State::Low));
+        let mut clk_states = vec![Transaction::get(State::Low)];
         for _i in 0..bits {
             clk_states.push(Transaction::get(State::High));
             clk_states.push(Transaction::get(State::Low));

@@ -229,17 +229,17 @@ mod tests {
         let data: u8 = 0b1010_1010;
         let mut group: FunctionGroupByte = data.into();
 
-        assert_eq!(group.get(F0), false); // F0 should be at index 4
-        assert_eq!(group.get(F4), true);
+        assert!(!group.get(F0)); // F0 should be at index 4
+        assert!(group.get(F4));
 
-        assert_eq!(group.get(F5), false);
-        assert_eq!(group.get(F6), true);
-        assert_eq!(group.get(F7), false);
-        assert_eq!(group.get(F8), true);
-        assert_eq!(group.get(F9), false);
-        assert_eq!(group.get(F10), true);
-        assert_eq!(group.get(F11), false);
-        assert_eq!(group.get(F12), true);
+        assert!(!group.get(F5));
+        assert!(group.get(F6));
+        assert!(!group.get(F7));
+        assert!(group.get(F8));
+        assert!(!group.get(F9));
+        assert!(group.get(F10));
+        assert!(!group.get(F11));
+        assert!(group.get(F12));
         group.set(F9, true);
         group.set(F10, false);
         let data: u8 = group.into();
@@ -253,25 +253,25 @@ mod tests {
     #[test]
     fn needs_ack() {
         let msg = Msg::Unknown([0; 3]);
-        assert_eq!(msg.needs_ack(), false);
+        assert!(!msg.needs_ack());
         let msg = Msg::LocomotiveLoad(127);
-        assert_eq!(msg.needs_ack(), false);
+        assert!(!msg.needs_ack());
         let msg = Msg::CVByteCheck {
             addr: 127,
             value: 0xAA,
         };
-        assert_eq!(msg.needs_ack(), true);
+        assert!(msg.needs_ack());
         let msg = Msg::CVBitManipulation {
             addr: 222,
             check: false,
             value: true,
             position: 5,
         };
-        assert_eq!(msg.needs_ack(), true);
+        assert!(msg.needs_ack());
         let msg = Msg::CVByteSet {
             addr: 130,
             value: 0xBB,
         };
-        assert_eq!(msg.needs_ack(), true);
+        assert!(msg.needs_ack());
     }
 }

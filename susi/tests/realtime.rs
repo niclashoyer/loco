@@ -45,7 +45,7 @@ type SusiReader = loco_susi::reader::Reader<OpenDrainPin, InputOnlyPin, MsToStdC
 
 fn write_and_read<FS: 'static, FR: 'static>(write: FS, read: FR) -> Vec<Msg>
 where
-    FS: FnOnce(SusiWriter) -> () + Send,
+    FS: FnOnce(SusiWriter) + Send,
     FR: FnOnce(SusiReader) -> Vec<Msg> + Send,
 {
     use std::thread::sleep;
@@ -93,7 +93,7 @@ fn write_and_read_messages(msgs: Vec<Msg>) {
         while let Some(msg) = write_msgs.pop() {
             loop {
                 let res = writer.write(&msg);
-                if let Ok(_) = res {
+                if res.is_ok() {
                     break;
                 } else if res != Err(nb::Error::WouldBlock) {
                     panic!("{:?}", res);
