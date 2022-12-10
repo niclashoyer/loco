@@ -2,16 +2,10 @@
 
 members = [
   "core",
-  "command-station",
-  "command-station/examples/linux-dcc",
+#  "command-station",
+#  "command-station/examples/linux-dcc",
   "dcc",
-  "susi",
-  "xpressnet",
-  "z21"
+#  "susi",
+#  "xpressnet",
+#  "z21"
 ]
-
-[patch.crates-io]
-# patches needed to adapt to embedded-hal 1.0.0
-embedded-hal-mock = { git = "https://github.com/niclashoyer/embedded-hal-mock", branch = "timers" }
-drogue-embedded-timer = { git = "https://github.com/niclashoyer/drogue-embedded-timer", branch = "hal-1.0.0" }
-linux-embedded-hal = { git = "https://github.com/caemor/linux-embedded-hal" }
