@@ -31,7 +31,7 @@ where
     }
 
     async fn write_bit(&mut self, write_one: bool) -> Result<(), Error> {
-        trace!("writin bit {}", write_one as i8);
+        trace!("writing bit {}", write_one as i8);
         let us = if write_one {
             ONE_HALF_BIT
         } else {
