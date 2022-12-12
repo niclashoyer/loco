@@ -82,7 +82,7 @@ where
 
     async fn read_byte(&mut self) -> Result<u8, Error> {
         let mut byte = 0x00;
-        for i in 0..7 {
+        for i in 0..8 {
             let bit = self.read_bit().await?;
             if bit {
                 byte |= 1 << i;
