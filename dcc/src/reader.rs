@@ -1,222 +1,118 @@
-use embedded_hal::digital::blocking::InputPin;
-use embedded_hal::timer::nb::CountDown;
-use embedded_time::duration::*;
-use log::{debug, trace};
+use embassy_futures::select::{select, Either};
+use embedded_hal_async::delay::DelayUs;
+use embedded_hal_async::digital::Wait;
 
 use crate::message::Message;
 use crate::Error;
 
+use log::{debug, trace};
+
 const BUF_SIZE: usize = 8;
+const TIMEOUT_ONE: u32 = 73;
 
-#[derive(Debug, PartialEq)]
-enum State {
-    Idle,
-    Byte,
-    StartBit,
+pub trait Reader {
+    async fn read(&mut self) -> Result<Message, Error>;
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum Bit {
-    Zero,
-    One,
-}
-
-impl Copy for Bit {}
-
-impl From<Bit> for bool {
-    #[inline]
-    fn from(bit: Bit) -> bool {
-        bit == Bit::One
-    }
-}
-
-impl From<Bit> for u8 {
-    #[inline]
-    fn from(bit: Bit) -> u8 {
-        use Bit::*;
-        match bit {
-            One => 0x01,
-            Zero => 0x00,
-        }
-    }
-}
-
-pub trait Decoder {
-    fn decode(&mut self) -> nb::Result<Bit, Error>;
-}
-
-#[derive(Debug)]
-pub struct PinDecoder<DCC, TIM> {
+pub struct PinDelayReader<DCC, US> {
     pin_dcc: DCC,
-    timer: TIM,
-    last_half_bit: Option<Bit>,
-    last_pin_state: bool,
+    delay: US,
 }
 
-impl<DCC, TIM> PinDecoder<DCC, TIM>
+impl<DCC, US> PinDelayReader<DCC, US>
 where
-    DCC: InputPin,
-    TIM: CountDown,
-    TIM::Time: From<Microseconds<u32>>,
+    DCC: Wait,
+    US: DelayUs,
 {
-    fn start_timeout(&mut self) -> Result<(), Error> {
-        self.timer
-            .start(73.microseconds())
-            .map_err(|_| Error::TimerError)?;
-        Ok(())
+    pub fn new(pin_dcc: DCC, delay: US) -> Self {
+        Self { pin_dcc, delay }
     }
+}
 
-    pub fn new(pin_dcc: DCC, timer: TIM) -> Self {
-        let last_pin_state = pin_dcc.is_high().unwrap_or(false);
-        Self {
-            pin_dcc,
-            timer,
-            last_half_bit: None,
-            last_pin_state,
+impl<DCC, US> PinDelayReader<DCC, US>
+where
+    DCC: Wait,
+    US: DelayUs,
+{
+    async fn read_half_bit(&mut self) -> Result<bool, Error> {
+        let result = select(
+            self.pin_dcc.wait_for_any_edge(),
+            self.delay.delay_us(TIMEOUT_ONE),
+        )
+        .await;
+        if let Either::First(_) = result {
+            Ok(true)
+        } else {
+            self.pin_dcc
+                .wait_for_any_edge()
+                .await
+                .map_err(|_| Error::IOError)?;
+            Ok(false)
         }
     }
-}
 
-impl<DCC, TIM> Decoder for PinDecoder<DCC, TIM>
-where
-    DCC: InputPin,
-    TIM: CountDown,
-    TIM::Time: From<Microseconds<u32>>,
-{
-    fn decode(&mut self) -> nb::Result<Bit, Error> {
-        let mut ret = None;
-        let pin_state = self.pin_dcc.is_high().unwrap_or(false);
-        if pin_state != self.last_pin_state {
-            if self.timer.wait().is_ok() {
-                ret = self.handle_half_bit(Bit::Zero);
+    async fn read_bit(&mut self) -> Result<bool, Error> {
+        let mut last_half = None;
+        loop {
+            let half = self.read_half_bit().await?;
+            trace!("read edge as {}", half as i32);
+            if let Some(other) = last_half {
+                if other == half {
+                    trace!("read bit {}", half as i32);
+                    return Ok(half);
+                }
+            }
+            last_half = Some(half);
+        }
+    }
+
+    async fn read_preamble(&mut self) -> Result<(), Error> {
+        let mut ones = 0;
+        loop {
+            let bit = self.read_bit().await?;
+            if bit {
+                ones += 1;
+            } else if ones > 9 {
+                return Ok(());
             } else {
-                ret = self.handle_half_bit(Bit::One);
+                ones = 0;
             }
-            self.start_timeout()?;
-            self.last_pin_state = pin_state;
         }
-        if let Some(bit) = ret {
-            Ok(bit)
-        } else {
-            Err(nb::Error::WouldBlock)
+    }
+
+    async fn read_byte(&mut self) -> Result<u8, Error> {
+        let mut byte = 0x00;
+        for i in 0..7 {
+            let bit = self.read_bit().await?;
+            if bit {
+                byte |= 1 << i;
+            }
         }
+        Ok(byte)
     }
 }
 
-impl<DCC, TIM> PinDecoder<DCC, TIM>
+impl<DCC, US> Reader for PinDelayReader<DCC, US>
 where
-    DCC: InputPin,
-    TIM: CountDown,
-    TIM::Time: From<Microseconds<u32>>,
+    DCC: Wait,
+    US: DelayUs,
 {
-    #[inline]
-    fn handle_half_bit(&mut self, bit: Bit) -> Option<Bit> {
-        trace!(
-            "{:<20}{:<20}",
-            "edge detected".to_string(),
-            format!("{:?}/{:?}", self.last_half_bit, bit)
-        );
-        if self.last_half_bit == Some(bit) {
-            self.last_half_bit = None;
-            Some(bit)
-        } else {
-            self.last_half_bit = Some(bit);
-            None
-        }
-    }
-}
+    async fn read(&mut self) -> Result<Message, Error> {
+        let mut buf: [u8; BUF_SIZE] = [0; BUF_SIZE];
+        let mut current_byte = 0;
 
-/// A reader for the DCC protocol
-pub struct Reader<D> {
-    decoder: D,
-    one_bits: u8,
-    current_byte: u8,
-    buf: [u8; BUF_SIZE],
-    bits_read: u8,
-    state: State,
-}
-
-impl<D> Reader<D>
-where
-    D: Decoder,
-{
-    pub fn new(decoder: D) -> Self {
-        Self {
-            decoder,
-            current_byte: 0,
-            one_bits: 0,
-            buf: [0; BUF_SIZE],
-            bits_read: 0,
-            state: State::Idle,
-        }
-    }
-
-    fn reset(&mut self) {
-        use State::*;
-        self.state = Idle;
-        self.bits_read = 0;
-        self.current_byte = 0;
-        self.buf = [0; BUF_SIZE];
-    }
-
-    fn start(&mut self) {
-        use State::*;
-        self.state = Byte;
-        self.bits_read = 0;
-        self.one_bits = 0;
-        self.current_byte = 0;
-        self.buf = [0; BUF_SIZE];
-    }
-
-    pub fn read(&mut self) -> nb::Result<Message, Error> {
-        use Bit::*;
-        use State::*;
-        let bit = self.decoder.decode()?;
-        trace!(
-            "{:<20}{:<20}",
-            "bit read",
-            format!("{:?}/{:?}/{:?}", self.state, bit, self.bits_read)
-        );
-        match bit {
-            One => {
-                self.one_bits += 1;
+        self.read_preamble().await?;
+        debug!("detected preamble + zero, start reading bits");
+        while current_byte < BUF_SIZE {
+            buf[current_byte] = self.read_byte().await?;
+            debug!("read byte {:#04x}", buf[current_byte]);
+            if self.read_bit().await? {
+                let msg = Message::from_bytes(&buf[..current_byte]);
+                debug!("read bytes {:#04X?} as {:?}", &buf[..current_byte], msg);
+                return Ok(msg);
             }
-            Zero => {
-                if self.one_bits > 9 {
-                    debug!("detected preamble + zero, start reading bits");
-                    self.start();
-                    return Err(nb::Error::WouldBlock);
-                }
-                self.one_bits = 0;
-            }
+            current_byte += 1;
         }
-        match self.state {
-            Byte => {
-                let i = self.current_byte as usize;
-                let data: u8 = bit.into();
-                self.buf[i] <<= 1;
-                self.buf[i] |= data;
-                self.bits_read += 1;
-                if self.bits_read == 8 {
-                    debug!("read byte {:#04x}", self.buf[i]);
-                    self.bits_read = 0;
-                    self.current_byte += 1;
-                    self.state = StartBit;
-                }
-            }
-            StartBit => {
-                if bit == Zero {
-                    self.state = Byte;
-                } else {
-                    let len = self.current_byte as usize;
-                    let msg = Message::from_bytes(&self.buf[..len]);
-                    debug!("read bytes {:#04X?} as {:?}", &self.buf[..len], msg);
-                    self.reset();
-                    return Ok(msg);
-                }
-            }
-            _ => {}
-        }
-        Err(nb::Error::WouldBlock)
+        Err(Error::OverflowError)
     }
 }
