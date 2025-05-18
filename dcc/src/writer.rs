@@ -37,15 +37,9 @@ where
         } else {
             ZERO_HALF_BIT
         };
-        self.delay
-            .delay_us(us)
-            .await
-            .map_err(|_| Error::DelayError)?;
+        self.delay.delay_us(us).await;
         self.pin_dcc.toggle().map_err(|_| Error::IOError)?;
-        self.delay
-            .delay_us(us)
-            .await
-            .map_err(|_| Error::DelayError)?;
+        self.delay.delay_us(us).await;
         self.pin_dcc.toggle().map_err(|_| Error::IOError)?;
         Ok(())
     }
@@ -64,7 +58,7 @@ where
     DCC: ToggleableOutputPin,
     US: DelayUs,
 {
-    async fn write<'a>(&mut self, msg: &'a Message) -> Result<(), Error> {
+    async fn write<'a>(&'a mut self, msg: &'a Message) -> Result<(), Error> {
         let mut buf: [u8; BUF_SIZE] = [0; BUF_SIZE];
         let bytes_to_write = msg.to_buf(&mut buf);
         self.write_preamble().await?;
