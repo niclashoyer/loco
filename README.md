@@ -4,7 +4,7 @@ Crates and components for model railroad control. This project started as a rust
 learning excercise around christmas to learn embedded rust while the model train ran
 around the christmas tree.
 
-It was originally based on `embedded-hal` 0.2.7. Unfortunately a lot of traits (especially timers) got removed for the final 1.0.0 release. A partial port to `async` rust (with embassy) is in the `async` branch.
+It was originally based on `embedded-hal` 0.2.7. Unfortunately a lot of traits (especially timers) got removed for the final 1.0.0 release. A partial port to async rust (with embassy) is in the `async` branch.
 
 Tests where added on the go. Take this project as it is: a learning excercise and a playground for model railroads ☺️
 
