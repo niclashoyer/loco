@@ -10,9 +10,9 @@ Tests where added on the go. Take this project as it is: a learning excercise an
 
 | crate         | description |
 | ------------- | ------------- |
-| core          | core traits and types used by all other crates (e.g. addresse, functions, macros)  |
-| dcc           | [Digital Command Control](https://en.wikipedia.org/wiki/Digital_Command_Control) (DCC) driver implementation |
-| susi          | [Serial User Standard Interface](https://dccwiki.com/SUSI) (SUSI) driver implementation |
-| xpressnet     | [XpressNet](https://dccwiki.com/XpressNet) driver implementation |
-| z21           | partial [Z21 LAN Protocol] implementation based en `embedded-nal` |
-| command-station | basic command station implementation with a [Raspberry Pi example](./command-station/examples/linux-dcc/) |
+| [core](./core) | core traits and types used by all other crates (e.g. addresse, functions, macros)  |
+| [dcc](./dcc) | [Digital Command Control](https://en.wikipedia.org/wiki/Digital_Command_Control) (DCC) driver implementation |
+| [susi](./susi) | [Serial User Standard Interface](https://dccwiki.com/SUSI) (SUSI) driver implementation |
+| [xpressnet](./xpressnet) | [XpressNet](https://dccwiki.com/XpressNet) driver implementation |
+| [z21](./z21) | partial [Z21 LAN Protocol](https://www.z21.eu/media/Kwc_Basic_DownloadTag_Component/root-en-main_47-1652-959-downloadTag-download/default/d559b9cf/1628743384/z21-lan-protokoll-en.pdf) implementation based en `embedded-nal` |
+| [command-station](./command-station) | basic command station implementation with a [Raspberry Pi example](./command-station/examples/linux-dcc/) |
