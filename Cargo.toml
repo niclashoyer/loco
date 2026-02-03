@@ -4,10 +4,10 @@ resolver = "3"
 
 members = [
   "core",
-#  "command-station",
-#  "command-station/examples/linux-dcc",
+  # "command-station",
+  # "command-station/examples/linux-dcc",
   "dcc",
-#  "susi",
-#  "xpressnet",
-#  "z21"
+  # "susi",
+  # "xpressnet",
+  # "z21"
 ]

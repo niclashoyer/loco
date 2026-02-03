@@ -1,5 +1,5 @@
 use embassy_futures::select::{select, Either};
-use embedded_hal_async::delay::DelayUs;
+use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::digital::Wait;
 
 use crate::message::Message;
@@ -10,6 +10,7 @@ use log::{debug, trace};
 const BUF_SIZE: usize = 8;
 const TIMEOUT_ONE: u32 = 73;
 
+#[allow(async_fn_in_trait)]
 pub trait Reader {
     async fn read(&mut self) -> Result<Message, Error>;
 }
@@ -19,20 +20,20 @@ pub struct PinDelayReader<DCC, US> {
     delay: US,
 }
 
-impl<DCC, US> PinDelayReader<DCC, US>
+impl<DCC, D> PinDelayReader<DCC, D>
 where
     DCC: Wait,
-    US: DelayUs,
+    D: DelayNs,
 {
-    pub fn new(pin_dcc: DCC, delay: US) -> Self {
+    pub fn new(pin_dcc: DCC, delay: D) -> Self {
         Self { pin_dcc, delay }
     }
 }
 
-impl<DCC, US> PinDelayReader<DCC, US>
+impl<DCC, D> PinDelayReader<DCC, D>
 where
     DCC: Wait,
-    US: DelayUs,
+    D: DelayNs,
 {
     async fn read_half_bit(&mut self) -> Result<bool, Error> {
         let result = select(
@@ -92,10 +93,10 @@ where
     }
 }
 
-impl<DCC, US> Reader for PinDelayReader<DCC, US>
+impl<DCC, D> Reader for PinDelayReader<DCC, D>
 where
     DCC: Wait,
-    US: DelayUs,
+    D: DelayNs,
 {
     async fn read(&mut self) -> Result<Message, Error> {
         let mut buf: [u8; BUF_SIZE] = [0; BUF_SIZE];

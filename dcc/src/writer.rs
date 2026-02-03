@@ -1,5 +1,5 @@
-use embedded_hal::digital::ToggleableOutputPin;
-use embedded_hal_async::delay::DelayUs;
+use embedded_hal::digital::StatefulOutputPin;
+use embedded_hal_async::delay::DelayNs;
 
 use crate::message::Message;
 use crate::Error;
@@ -12,21 +12,22 @@ const PREAMBLE_SIZE: u8 = 14;
 const ONE_HALF_BIT: u32 = 58;
 const ZERO_HALF_BIT: u32 = 100;
 
+#[allow(async_fn_in_trait)]
 pub trait Writer {
     async fn write<'a>(&'a mut self, msg: &'a Message) -> Result<(), Error>;
 }
 
-pub struct PinWriter<DCC, US> {
+pub struct PinWriter<DCC, D> {
     pin_dcc: DCC,
-    delay: US,
+    delay: D,
 }
 
-impl<DCC, US> PinWriter<DCC, US>
+impl<DCC, D> PinWriter<DCC, D>
 where
-    DCC: ToggleableOutputPin,
-    US: DelayUs,
+    DCC: StatefulOutputPin,
+    D: DelayNs,
 {
-    pub fn new(pin_dcc: DCC, delay: US) -> Self {
+    pub fn new(pin_dcc: DCC, delay: D) -> Self {
         Self { pin_dcc, delay }
     }
 
@@ -53,10 +54,10 @@ where
     }
 }
 
-impl<DCC, US> Writer for PinWriter<DCC, US>
+impl<DCC, D> Writer for PinWriter<DCC, D>
 where
-    DCC: ToggleableOutputPin,
-    US: DelayUs,
+    DCC: StatefulOutputPin,
+    D: DelayNs,
 {
     async fn write<'a>(&'a mut self, msg: &'a Message) -> Result<(), Error> {
         let mut buf: [u8; BUF_SIZE] = [0; BUF_SIZE];
