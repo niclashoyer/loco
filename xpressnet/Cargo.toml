@@ -2,7 +2,8 @@
 name = "loco-xpressnet"
 version = "0.1.0"
 authors = ["Niclas Hoyer <info@niclashoyer.de>"]
-edition = "2018"
+edition = "2024"
+license = "MIT OR Apache-2.0"
 
 [features]
 z21 = []
